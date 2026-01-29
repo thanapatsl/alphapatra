@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AlphaPatra - ระบบจัดการลูกค้าปั้นพอร์ต</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+    body { font-family: 'Sarabun', sans-serif; }
+
+    @media print {
+      .no-print { display: none !important; }
+      .customer-list-section { display: none !important; }
+      body { font-size: 12px; }
+      .print-table { font-size: 11px; }
+      .page-break { page-break-after: always; }
+    }
+
+    .kbank-green { background-color: #138f2d; }
+    .kbank-green-light { background-color: #e8f5e8; }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+<div id="app" class="container mx-auto p-4 max-w-7xl">
+
+  <!-- =======================
+       CUSTOMER DASHBOARD
+  ======================== -->
+  <section id="customerListSection" class="customer-list-section">
+    <div class="bg-white rounded-lg shadow-lg mb-6 p-6">
+      <div class="flex items-start justify-between gap-4 mb-6">
+        <div class="flex items-start space-x-4">
+          <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-blue-600 rounded-lg flex items-center justify-center">
+            <span class="text-white font-bold text-xl">💼</span>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-800">ระบบจัดการลูกค้าปั้นพอร์ต AlphaPatra</h1>
+            <p class="text-gray-600">จัดการใบแสดงรายการปั้นพอร์ต และดูภาพรวมทุกพอร์ตในที่เดียว</p>
+
+            <div class="mt-3 flex flex-wrap items-center gap-4">
+              <div class="flex items-center space-x-3">
+                <span class="text-lg font-semibold text-blue-700">ยอดรวมทุกบัญชี:</span>
+                <div id="totalAllAccounts"
+                     class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg">
+                  0.00
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-2">
+                <span class="text-sm text-gray-500">ลูกค้าทั้งหมด</span>
+                <span class="text-xl font-bold text-blue-600" id="customerCount">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row md:items-center gap-2">
+          <button id="btnOpenOverview"
+                  class="no-print bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-lg transition-colors flex items-center space-x-2 shadow-lg">
+            <span>📊</span><span class="font-medium">สรุปภาพรวมลูกค้าทั้งหมด</span>
+          </button>
+
+          <button id="btnAddCustomer"
+                  class="bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-lg transition-colors flex items-center space-x-2 shadow-lg">
+            <span>➕</span><span class="font-medium">เพิ่มลูกค้าใหม่</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="customerGrid">
+        <!-- Cards injected -->
+      </div>
+
+      <div class="mt-6 text-xs text-gray-400">
+        💾 ระบบบันทึกแบบ “แยกลูกค้าคนละไฟล์” ใน LocalStorage: แก้ปัญหาก้อนข้อมูลใหญ่-พังง่าย และย้าย/ซ่อมเฉพาะรายได้
+      </div>
+    </div>
+  </section>
+
+  <!-- =======================
+       STATEMENT VIEW
+  ======================== -->
+  <section id="statementSection" class="hidden">
+    <!-- Nav -->
+    <div class="bg-white rounded-lg shadow-lg mb-4 p-4">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex items-center space-x-4">
+          <button id="btnBackHome"
+                  class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2">
+            <span>←</span><span>กลับหน้าหลัก</span>
+          </button>
+          <div class="h-6 w-px bg-gray-300"></div>
+          <div>
+            <h2 class="text-lg font-semibold text-gray-800" id="currentCustomerName">ลูกค้า</h2>
+            <p class="text-sm text-gray-600">ใบแสดงรายการปั้นพอร์ต</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 no-print">
+          <button id="btnRenameCustomer"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+            ✏️ เปลี่ยนชื่อ
+          </button>
+          <button id="btnDeleteCustomer"
+                  class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors">
+            🗑️ ลบลูกค้า
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-lg mb-6 p-6">
+      <div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <div class="flex items-center space-x-4">
+          <div class="relative">
+            <div id="logoContainer"
+                 class="w-12 h-12 kbank-green rounded-lg flex items-center justify-center cursor-pointer hover:bg-green-700 transition-colors"
+                 title="คลิกเพื่ออัปโหลดโลโก้"
+            >
+              <span id="logoText" class="text-white font-bold text-xl">K</span>
+              <img id="logoImage" class="w-12 h-12 rounded-lg object-cover hidden" alt="Bank Logo">
+            </div>
+            <input type="file" id="logoInput" accept="image/*" class="hidden">
+          </div>
+
+          <input type="text" id="reportTitle"
+                 value="ใบแสดงรายการปั้นพอร์ต"
+                 class="text-2xl font-bold text-gray-800 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white rounded px-2 py-1">
+        </div>
+
+        <div class="no-print flex flex-wrap gap-2 justify-end">
+          <div class="relative">
+            <button id="btnExportMenu"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+              📤 ส่งออก
+              <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+
+            <div id="exportMenu"
+                 class="hidden absolute right-0 mt-2 w-60 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+              <div class="py-2">
+                <button id="btnExportPNG" class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center">🖼️ บันทึกเป็น PNG</button>
+                <button id="btnExportJPG" class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center">📸 บันทึกเป็น JPEG</button>
+                <hr class="my-1">
+                <button id="btnExportCSVCustomer" class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center">📊 Export CSV (ลูกค้านี้)</button>
+                <button id="btnExportCSVAll" class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center">🗂️ Export CSV (ทั้งระบบ)</button>
+                <hr class="my-1">
+                <button id="btnPrint" class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center">🖨️ Print PDF</button>
+              </div>
+            </div>
+          </div>
+
+          <input type="file" id="csvInputCustomer" accept=".csv" class="hidden">
+          <button id="btnImportCSVCustomer"
+                  class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+            📁 Import CSV (ลูกค้านี้)
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">เจ้าของเงินลงทุน</label>
+          <input type="text" id="bankName"
+                 value="ธนาคารกสิกรไทย"
+                 class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ผู้ดูแลพอร์ตหุ้น</label>
+          <input type="text" id="accountNo"
+                 value="นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)"
+                 class="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-700"
+                 readonly>
+        </div>
+      </div>
+
+      <div class="mt-4 flex justify-start items-start">
+        <div class="flex flex-wrap gap-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">เงินลงทุนเริ่มต้น (รวมฝากเงินทั้งหมด)</label>
+            <div id="initialInvestment"
+                 class="w-64 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-center font-bold text-lg text-red-700">
+              0.00
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">สรุปยอดเงินล่าสุด</label>
+            <div id="finalBalance"
+                 class="w-64 p-3 bg-green-50 border-2 border-green-300 rounded-lg text-center font-bold text-lg text-green-700">
+              0.00
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transaction Table -->
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+      <div class="p-4 kbank-green-light border-b">
+        <div class="flex justify-between items-center gap-2 flex-wrap">
+          <h2 class="text-lg font-semibold text-gray-800">รายการธุรกรรมปั้นพอร์ต</h2>
+          <button id="btnAddRow"
+                  class="no-print bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+            ➕ เพิ่มรายการ
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full print-table">
+          <thead class="kbank-green text-white">
+            <tr>
+              <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">วันที่</th>
+              <th class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider">ฝากเงิน</th>
+              <th class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider">ถอนเงิน</th>
+              <th class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider">กำไร %</th>
+              <th class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider">กำไร จำนวนเงิน</th>
+              <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">ช่องทาง</th>
+              <th class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider">ยอดคงเหลือ</th>
+              <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider">รายละเอียด</th>
+              <th class="px-3 py-3 text-center text-xs font-medium uppercase tracking-wider no-print">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="transactionTable" class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AlphaProfit -->
+    <div class="bg-white rounded-lg shadow-lg mt-6 p-6">
+      <div class="flex flex-col md:flex-row md:space-x-6">
+        <div class="md:w-1/2">
+          <h3 class="text-lg font-semibold text-gray-800 mb-1">💰 AlphaProfit – คำนวณส่วนแบ่งกำไร</h3>
+          <p class="text-sm text-gray-500 mb-4">ระบบคำนวณกำไรสุทธิ 50/50 อัตโนมัติทุกครั้งที่แก้ไขรายการ</p>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">📊 ยอดรวมทั้งหมด (หลังปั้นพอร์ต)</label>
+              <input id="ap_total" type="number" step="0.01" readonly
+                     class="w-full p-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-700">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">💵 เงินทุนลูกค้า (ต้นทุนเริ่มต้น)</label>
+              <input id="ap_fund" type="number" step="0.01" readonly
+                     class="w-full p-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-700">
+            </div>
+            <p class="text-xs text-emerald-600">✅ แก้ไขรายการเมื่อไหร่ ระบบอัปเดตผลให้ทันที</p>
+          </div>
+        </div>
+
+        <div class="md:w-1/2 mt-6 md:mt-0">
+          <div id="ap_result"
+               class="hidden border border-gray-200 rounded-xl bg-gray-50 p-4 md:p-5 shadow-sm"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-6 flex justify-end">
+      <div class="text-right text-sm text-gray-700">
+        <div class="font-semibold text-green-700 mb-1">อัลฟ่าภัทร AlphaPatra</div>
+        <div>เลขที่ 85/1 หมู่ 12 ตำบลสะแก</div>
+        <div>อำเภอสตึก จังหวัดบุรีรัมย์ 31150</div>
+        <div class="font-medium text-blue-600">(0863019724)</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- =======================
+     OVERVIEW MODAL
+======================== -->
+<div id="overviewModal"
+     class="fixed inset-0 bg-black bg-opacity-40 hidden z-50"
+     onclick="if (event.target === this) UI.closeOverview();">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+       onclick="event.stopPropagation();">
+    <div class="px-6 pt-5 pb-3 border-b border-gray-200 flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-gray-800">สรุปภาพรวมลูกค้าทั้งหมด</h2>
+        <p class="text-sm text-gray-500">รวมเงินทุน, มูลค่าล่าสุด, กำไรสุทธิ และ ROI ของทุกพอร์ต</p>
+      </div>
+      <button class="no-print px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium"
+              onclick="UI.closeOverview()">✕ ปิด</button>
+    </div>
+
+    <div class="px-6 pt-4 pb-5 overflow-y-auto">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
+        <div class="bg-indigo-50 rounded-xl p-3">
+          <div class="text-xs text-indigo-600 font-semibold mb-1">จำนวนลูกค้า</div>
+          <div class="text-2xl font-bold text-indigo-700" id="overviewTotalCustomers">0</div>
+        </div>
+        <div class="bg-emerald-50 rounded-xl p-3">
+          <div class="text-xs text-emerald-600 font-semibold mb-1">เงินทุนรวมทั้งหมด</div>
+          <div class="text-lg font-semibold text-emerald-700" id="overviewSumInitial">0.00</div>
+        </div>
+        <div class="bg-blue-50 rounded-xl p-3">
+          <div class="text-xs text-blue-600 font-semibold mb-1">มูลค่าพอร์ตรวมล่าสุด</div>
+          <div class="text-lg font-semibold text-blue-700" id="overviewSumFinal">0.00</div>
+        </div>
+        <div class="bg-amber-50 rounded-xl p-3">
+          <div class="text-xs text-amber-600 font-semibold mb-1">กำไรรวมทั้งหมด</div>
+          <div class="text-lg font-semibold text-emerald-600" id="overviewSumProfit">0.00</div>
+        </div>
+
+        <div class="bg-rose-50 rounded-xl p-3">
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-xs text-rose-600 font-semibold">กำไรเฉพาะเดือนที่เลือก</div>
+            <div class="flex items-center space-x-1 text-[10px] text-rose-600">
+              <select id="monthlyMonth"
+                      class="border border-rose-200 rounded px-1 py-[1px] bg-white focus:outline-none focus:ring-1 focus:ring-rose-400">
+                <option value="1">ม.ค.</option><option value="2">ก.พ.</option><option value="3">มี.ค.</option>
+                <option value="4">เม.ย.</option><option value="5">พ.ค.</option><option value="6">มิ.ย.</option>
+                <option value="7">ก.ค.</option><option value="8">ส.ค.</option><option value="9">ก.ย.</option>
+                <option value="10">ต.ค.</option><option value="11">พ.ย.</option><option value="12">ธ.ค.</option>
+              </select>
+              <select id="monthlyYear"
+                      class="border border-rose-200 rounded px-1 py-[1px] bg-white focus:outline-none focus:ring-1 focus:ring-rose-400">
+                <option value="2567">2567</option><option value="2568">2568</option><option value="2569">2569</option><option value="2570">2570</option>
+              </select>
+            </div>
+          </div>
+          <div id="overviewMonthlyLabel" class="text-[10px] text-rose-400 mb-1"></div>
+          <div class="text-lg font-semibold text-rose-700" id="overviewMonthlyProfit">0.00</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="border border-gray-200 rounded-xl overflow-hidden">
+          <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <span class="text-sm font-semibold text-gray-700">ตารางภาพรวมลูกค้า</span>
+            <span class="text-xs text-gray-500">เรียงตามลำดับการสร้าง</span>
+          </div>
+          <div class="max-h-72 overflow-y-auto">
+            <table class="min-w-full text-xs">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-2 py-2 text-left text-[11px] font-semibold text-gray-500">#</th>
+                  <th class="px-2 py-2 text-left text-[11px] font-semibold text-gray-500">ชื่อลูกค้า</th>
+                  <th class="px-2 py-2 text-right text-[11px] font-semibold text-gray-500">เงินทุนเริ่มต้น</th>
+                  <th class="px-2 py-2 text-right text-[11px] font-semibold text-gray-500">มูลค่าล่าสุด</th>
+                  <th class="px-2 py-2 text-right text-[11px] font-semibold text-gray-500">กำไรสุทธิ</th>
+                  <th class="px-2 py-2 text-right text-[11px] font-semibold text-gray-500">ผลตอบแทน %</th>
+                </tr>
+              </thead>
+              <tbody id="overviewTableBody" class="bg-white divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="border border-gray-200 rounded-xl p-3 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-semibold text-gray-700">Dashboard AlphaPatra</span>
+            <span class="text-xs text-gray-500">ยอดล่าสุดต่อชื่อลูกค้า</span>
+          </div>
+          <div class="flex-1">
+            <canvas id="overviewChart" height="220"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/** ==========================
+ *  STORAGE (แยกลูกค้า)
+ *  ==========================
+ *  INDEX:  alphapatra_v2_customers_index
+ *  CUSTOMER DATA KEY: alphapatra_v2_customer_<id>
+ *  CUSTOMER LOGO KEY: alphapatra_v2_customer_<id>_logo
+ */
+const STORAGE = {
+  INDEX: 'alphapatra_v2_customers_index',
+  customerKey: (id) => `alphapatra_v2_customer_${id}`,
+  logoKey: (id) => `alphapatra_v2_customer_${id}_logo`
+};
+
+const Utils = {
+  id() { return Date.now().toString(36) + Math.random().toString(36).slice(2); },
+  toNum(v) {
+    if (v === "" || v === null || v === undefined) return 0;
+    const n = (typeof v === "string") ? parseFloat(v.replace(/,/g, "")) : v;
+    return Number.isFinite(n) ? n : 0;
+  },
+  fmt(n) {
+    const num = Number(n);
+    if (!Number.isFinite(num)) return "0.00";
+    return num.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+  normalizeNumber(val) {
+    if (val === "") return "";
+    const cleaned = String(val).replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    if (parts.length > 2) return parts[0] + "." + parts.slice(1).join("");
+    return cleaned;
+  },
+  safeCSV(str) {
+    const s = String(str ?? "");
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  },
+  parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (c === ',' && !inQuotes) {
+        result.push(current); current = '';
+      } else {
+        current += c;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+};
+
+const Data = {
+  getIndex() {
+    const raw = localStorage.getItem(STORAGE.INDEX);
+    if (!raw) return [];
+    try { return JSON.parse(raw) || []; } catch { return []; }
+  },
+  setIndex(list) {
+    localStorage.setItem(STORAGE.INDEX, JSON.stringify(list));
+  },
+  getCustomer(id) {
+    const raw = localStorage.getItem(STORAGE.customerKey(id));
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  },
+  setCustomer(id, obj) {
+    obj.updatedAt = Date.now();
+    localStorage.setItem(STORAGE.customerKey(id), JSON.stringify(obj));
+  },
+  deleteCustomer(id) {
+    localStorage.removeItem(STORAGE.customerKey(id));
+    localStorage.removeItem(STORAGE.logoKey(id));
+    const list = Data.getIndex().filter(x => x.id !== id);
+    Data.setIndex(list);
+  },
+  ensureSeed() {
+    let index = Data.getIndex();
+    if (index.length) return;
+
+    const id = 1;
+    const seedMeta = { id, name: "ลูกค้าคนที่ 1", createdAt: Date.now(), updatedAt: Date.now() };
+    const seedData = {
+      id,
+      name: seedMeta.name,
+      reportTitle: "ใบแสดงรายการปั้นพอร์ต",
+      bankName: "ธนาคารกสิกรไทย",
+      accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
+      transactions: [
+        { tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }
+      ],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    Data.setIndex([seedMeta]);
+    Data.setCustomer(id, seedData);
+  }
+};
+
+const Calc = {
+  computeFinalBalance(transactions) {
+    let running = 0;
+    for (const t of transactions) {
+      const dep = Utils.toNum(t.deposit);
+      const wdr = Utils.toNum(t.withdraw);
+      const pct = Utils.toNum(t.profitPercent);
+
+      const base = running;
+      const profit = pct !== 0 ? base * (pct / 100) : 0;
+
+      running = base + dep - wdr + profit;
+    }
+    return running;
+  },
+  computeBalancesWithProfit(transactions) {
+    let running = 0;
+    const balances = [];
+    const profitAmounts = [];
+    for (let i = 0; i < transactions.length; i++) {
+      const t = transactions[i];
+      const dep = Utils.toNum(t.deposit);
+      const wdr = Utils.toNum(t.withdraw);
+      const pct = Utils.toNum(t.profitPercent);
+
+      const base = running;
+      const profit = pct !== 0 ? base * (pct / 100) : 0;
+
+      running = base + dep - wdr + profit;
+      balances[i] = running;
+      profitAmounts[i] = profit;
+    }
+    return { balances, profitAmounts, finalBalance: running };
+  },
+  sumInitial(transactions) {
+    return transactions.reduce((s, t) => s + Utils.toNum(t.deposit), 0);
+  },
+  monthlyProfitAll(yearAD, month1to12) {
+    let total = 0;
+    const index = Data.getIndex();
+    for (const meta of index) {
+      const c = Data.getCustomer(meta.id);
+      if (!c) continue;
+
+      let running = 0;
+      for (const t of (c.transactions || [])) {
+        const dep = Utils.toNum(t.deposit);
+        const wdr = Utils.toNum(t.withdraw);
+        const pct = Utils.toNum(t.profitPercent);
+
+        const base = running;
+        const profit = pct !== 0 ? base * (pct / 100) : 0;
+
+        if (t.date) {
+          const d = new Date(t.date);
+          if (!Number.isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = d.getMonth() + 1;
+            if (y === yearAD && m === month1to12) total += profit;
+          }
+        }
+        running = base + dep - wdr + profit;
+      }
+    }
+    return total;
+  }
+};
+
+const UI = (() => {
+  let currentCustomerId = null;
+  let overviewChart = null;
+
+  const el = (id) => document.getElementById(id);
+
+  function showHome() {
+    el('statementSection').classList.add('hidden');
+    el('customerListSection').classList.remove('hidden');
+    currentCustomerId = null;
+    renderCustomerGrid();
+  }
+
+  function showStatement(id) {
+    currentCustomerId = id;
+    el('customerListSection').classList.add('hidden');
+    el('statementSection').classList.remove('hidden');
+
+    const c = Data.getCustomer(id);
+    if (!c) return showHome();
+
+    el('currentCustomerName').textContent = c.name;
+    el('reportTitle').value = c.reportTitle || "ใบแสดงรายการปั้นพอร์ต";
+    el('bankName').value = c.bankName || c.name || "";
+    el('accountNo').value = c.accountNo || "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)";
+
+    loadLogoForCustomer(id);
+    renderTransactionTable();
+  }
+
+  function renderCustomerGrid() {
+    const grid = el('customerGrid');
+    const index = Data.getIndex();
+
+    el('customerCount').textContent = index.length;
+
+    // total all accounts
+    let total = 0;
+    for (const meta of index) {
+      const c = Data.getCustomer(meta.id);
+      if (!c) continue;
+      total += Calc.computeFinalBalance(c.transactions || []);
+    }
+    const totalEl = el('totalAllAccounts');
+    totalEl.textContent = Utils.fmt(total);
+    totalEl.className = (total >= 0)
+      ? 'bg-gradient-to-r from-green-500 to-blue-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg'
+      : 'bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg';
+
+    grid.innerHTML = index.map((meta, i) => {
+      const c = Data.getCustomer(meta.id);
+      const txs = (c?.transactions || []);
+      const bal = Calc.computeFinalBalance(txs);
+      return `
+        <div class="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-blue-300 cursor-pointer group"
+             data-open="${meta.id}">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center text-base font-bold shadow-lg">
+                ${i + 1}
+              </div>
+              <div>
+                <div class="font-bold text-gray-800 text-base group-hover:text-blue-600 transition-colors line-clamp-1">${meta.name}</div>
+                <div class="text-xs text-gray-500">ID: ${meta.id}</div>
+              </div>
+            </div>
+            <div class="flex space-x-1">
+              <button class="btnRename text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-sm" data-rename="${meta.id}" title="เปลี่ยนชื่อ">✏️</button>
+              ${index.length > 1 ? `<button class="btnDelete text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors text-sm" data-delete="${meta.id}" title="ลบลูกค้า">🗑️</button>` : ''}
+            </div>
+          </div>
+
+          <div class="border-t border-gray-200 pt-3 space-y-1">
+            <div class="flex items-center justify-between text-xs text-gray-600">
+              <span>รายการทั้งหมด</span><span class="font-semibold">${txs.length} รายการ</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-600">
+              <span>ยอดคงเหลือ</span>
+              <span class="font-bold ${bal >= 0 ? 'text-green-600' : 'text-red-600'}">${Utils.fmt(bal)}</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-500">
+              <span>อัปเดตล่าสุด</span>
+              <span>${new Date(meta.updatedAt || Date.now()).toLocaleDateString('th-TH')}</span>
+            </div>
+          </div>
+
+          <div class="mt-3 flex items-center justify-center">
+            <div class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium group-hover:bg-green-200 transition-colors">
+              📄 ดูใบแสดงรายการ
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // bind clicks
+    grid.querySelectorAll('[data-open]').forEach(card => {
+      card.addEventListener('click', () => showStatement(parseInt(card.getAttribute('data-open'), 10)));
+    });
+    grid.querySelectorAll('[data-rename]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renameCustomer(parseInt(btn.getAttribute('data-rename'), 10));
+      });
+    });
+    grid.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteCustomer(parseInt(btn.getAttribute('data-delete'), 10));
+      });
+    });
+  }
+
+  function addCustomer() {
+    const index = Data.getIndex();
+    const nextId = (index.reduce((m, x) => Math.max(m, x.id), 0) || 0) + 1;
+    const name = prompt('ชื่อลูกค้าใหม่:', `ลูกค้าคนที่ ${nextId}`);
+    if (!name || !name.trim()) return;
+
+    const meta = { id: nextId, name: name.trim(), createdAt: Date.now(), updatedAt: Date.now() };
+    const data = {
+      id: nextId,
+      name: meta.name,
+      reportTitle: "ใบแสดงรายการปั้นพอร์ต",
+      bankName: meta.name,
+      accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
+      transactions: [{ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    Data.setIndex([...index, meta]);
+    Data.setCustomer(nextId, data);
+    renderCustomerGrid();
+    showStatement(nextId);
+  }
+
+  function renameCustomer(id) {
+    const index = Data.getIndex();
+    const meta = index.find(x => x.id === id);
+    if (!meta) return;
+
+    const newName = prompt('ชื่อใหม่:', meta.name);
+    if (!newName || !newName.trim() || newName.trim() === meta.name) return;
+
+    meta.name = newName.trim();
+    meta.updatedAt = Date.now();
+    Data.setIndex(index);
+
+    const c = Data.getCustomer(id);
+    if (c) {
+      c.name = meta.name;
+      // bankName ให้คงตามเดิม (บางบ้านอยากให้เป็นชื่อธนาคาร) แต่ถ้าอยากตามชื่อก็ uncomment บรรทัดล่าง
+      // c.bankName = meta.name;
+      Data.setCustomer(id, c);
+    }
+    renderCustomerGrid();
+    if (currentCustomerId === id) el('currentCustomerName').textContent = meta.name;
+  }
+
+  function deleteCustomer(id) {
+    const index = Data.getIndex();
+    if (index.length <= 1) return alert('ต้องมีลูกค้าอย่างน้อย 1 คน');
+
+    const meta = index.find(x => x.id === id);
+    if (!meta) return;
+
+    if (!confirm(`ต้องการลบลูกค้า "${meta.name}" หรือไม่?\n\nข้อมูลทั้งหมดของลูกค้าจะถูกลบอย่างถาวร`)) return;
+
+    Data.deleteCustomer(id);
+
+    if (currentCustomerId === id) showHome();
+    else renderCustomerGrid();
+  }
+
+  function saveCurrentCustomerFromInputs() {
+    if (!currentCustomerId) return;
+    const c = Data.getCustomer(currentCustomerId);
+    if (!c) return;
+
+    c.reportTitle = el('reportTitle').value || "ใบแสดงรายการปั้นพอร์ต";
+    c.bankName = el('bankName').value || c.name || "";
+    // accountNo เป็น readonly แต่เก็บไว้เผื่ออนาคต
+    c.accountNo = el('accountNo').value || c.accountNo;
+
+    Data.setCustomer(currentCustomerId, c);
+
+    // bump meta updatedAt
+    const index = Data.getIndex();
+    const meta = index.find(x => x.id === currentCustomerId);
+    if (meta) {
+      meta.updatedAt = Date.now();
+      meta.name = c.name || meta.name;
+      Data.setIndex(index);
+    }
+  }
+
+  function renderTransactionTable() {
+    if (!currentCustomerId) return;
+    const c = Data.getCustomer(currentCustomerId);
+    if (!c) return;
+
+    const txs = c.transactions || [];
+    const tbody = el('transactionTable');
+
+    // compute
+    const initial = Calc.sumInitial(txs);
+    const { balances, profitAmounts, finalBalance } = Calc.computeBalancesWithProfit(txs);
+
+    el('initialInvestment').textContent = Utils.fmt(initial);
+    el('finalBalance').textContent = Utils.fmt(finalBalance);
+    el('finalBalance').className = (finalBalance >= 0)
+      ? 'w-64 p-3 bg-green-50 border-2 border-green-300 rounded-lg text-center font-bold text-lg text-green-700'
+      : 'w-64 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-center font-bold text-lg text-red-700';
+
+    // AlphaProfit
+    el('ap_total').value = finalBalance ? finalBalance.toFixed(2) : '';
+    el('ap_fund').value = initial ? initial.toFixed(2) : '';
+    updateAlphaProfit(finalBalance, initial);
+
+    // render rows
+    tbody.innerHTML = txs.map((t, i) => {
+      const bal = balances[i] ?? 0;
+      const pAmt = profitAmounts[i] ?? 0;
+
+      return `
+        <tr class="hover:bg-gray-50">
+          <td class="px-3 py-4 whitespace-nowrap">
+            <input type="date" value="${t.date || ''}"
+                   data-i="${i}" data-f="date"
+                   class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
+          </td>
+
+          <td class="px-3 py-4 whitespace-nowrap text-right">
+            <input type="text" value="${t.deposit || ''}" placeholder="0.00"
+                   data-i="${i}" data-f="deposit"
+                   class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
+            <div class="text-xs text-blue-600 mt-1">${t.deposit ? Utils.fmt(Utils.toNum(t.deposit)) : ''}</div>
+          </td>
+
+          <td class="px-3 py-4 whitespace-nowrap text-right">
+            <input type="text" value="${t.withdraw || ''}" placeholder="0.00"
+                   data-i="${i}" data-f="withdraw"
+                   class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
+            <div class="text-xs text-red-600 mt-1">${t.withdraw ? Utils.fmt(Utils.toNum(t.withdraw)) : ''}</div>
+          </td>
+
+          <td class="px-3 py-4 whitespace-nowrap text-right">
+            <input type="text" value="${t.profitPercent || ''}" placeholder="0"
+                   data-i="${i}" data-f="profitPercent"
+                   class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
+            <div class="text-xs text-gray-600 mt-1">${t.profitPercent ? (t.profitPercent + ' %') : ''}</div>
+          </td>
+
+          <td class="px-3 py-4 whitespace-nowrap text-right">
+            <div class="w-full p-1 border border-gray-100 rounded bg-gray-50 text-right text-green-700">
+              ${pAmt ? Utils.fmt(pAmt) : ''}
+            </div>
+          </td>
+
+          <td class="px-3 py-4">
+            <input type="text" value="${t.channel || ''}" placeholder=""
+                   data-i="${i}" data-f="channel"
+                   class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
+          </td>
+
+          <td class="px-3 py-4 whitespace-nowrap text-right font-medium ${bal >= 0 ? 'text-green-600' : 'text-red-600'}">
+            ${Utils.fmt(bal)}
+          </td>
+
+          <td class="px-3 py-4">
+            <input type="text" value="${t.detail || ''}" placeholder=""
+                   data-i="${i}" data-f="detail"
+                   class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
+          </td>
+
+          <td class="px-3 py-4 whitespace-nowrap text-center no-print">
+            <button class="btnInsert text-blue-600 hover:text-blue-800 mr-2" data-insert="${i}" title="เพิ่มแถวใหม่">➕</button>
+            <button class="btnRemove text-red-600 hover:text-red-800" data-remove="${i}" title="ลบแถว">🗑️</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // bind inputs
+    tbody.querySelectorAll('input[data-i]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const i = parseInt(inp.getAttribute('data-i'), 10);
+        const f = inp.getAttribute('data-f');
+        let v = inp.value;
+
+        if (['deposit','withdraw','profitPercent'].includes(f)) v = Utils.normalizeNumber(v);
+
+        const c2 = Data.getCustomer(currentCustomerId);
+        if (!c2) return;
+        c2.transactions[i][f] = v;
+        Data.setCustomer(currentCustomerId, c2);
+
+        // refresh
+        renderTransactionTable();
+        renderCustomerGrid(); // update totals card
+      });
+    });
+
+    // bind buttons
+    tbody.querySelectorAll('[data-insert]').forEach(btn => {
+      btn.addEventListener('click', () => insertRow(parseInt(btn.getAttribute('data-insert'), 10)));
+    });
+    tbody.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => removeRow(parseInt(btn.getAttribute('data-remove'), 10)));
+    });
+
+    // persist header fields too
+    saveCurrentCustomerFromInputs();
+  }
+
+  function addRow() {
+    if (!currentCustomerId) return;
+    const c = Data.getCustomer(currentCustomerId);
+    if (!c) return;
+
+    c.transactions.push({ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" });
+    Data.setCustomer(currentCustomerId, c);
+    renderTransactionTable();
+    renderCustomerGrid();
+  }
+
+  function insertRow(i) {
+    if (!currentCustomerId) return;
+    const c = Data.getCustomer(currentCustomerId);
+    if (!c) return;
+
+    c.transactions.splice(i + 1, 0, { tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" });
+    Data.setCustomer(currentCustomerId, c);
+    renderTransactionTable();
+    renderCustomerGrid();
+  }
+
+  function removeRow(i) {
+    if (!currentCustomerId) return;
+    const c = Data.getCustomer(currentCustomerId);
+    if (!c) return;
+
+    if ((c.transactions || []).length <= 1) return alert('ต้องมีรายการอย่างน้อย 1 รายการ');
+    c.transactions.splice(i, 1);
+    Data.setCustomer(currentCustomerId, c);
+    renderTransactionTable();
+    renderCustomerGrid();
+  }
+
+  function updateAlphaProfit(total, fund) {
+    const resultDiv = el('ap_result');
+    if (!resultDiv) return;
+
+    if ((total === 0 && fund === 0) || (!Number.isFinite(total) && !Number.isFinite(fund))) {
+      resultDiv.classList.add('hidden');
+      return;
+    }
+
+    const profit = total - fund;
+    const half = profit / 2;
+    const clientNet = fund + half;
+    const managerNet = half;
+
+    resultDiv.innerHTML = `
+      <h4 class="text-base md:text-lg font-semibold text-gray-800 mb-3 text-center">📑 สรุปผลการแบ่งกำไร</h4>
+      <div class="space-y-2 text-sm md:text-base">
+        <div class="flex justify-between border-b border-gray-200 pb-1">
+          <span class="text-gray-600">ยอดรวมทั้งหมด</span>
+          <span class="font-semibold text-gray-800">${Utils.fmt(total)} บาท</span>
+        </div>
+        <div class="flex justify-between border-b border-gray-200 pb-1">
+          <span class="text-gray-600">เงินทุนลูกค้า</span>
+          <span class="font-semibold text-gray-800">${Utils.fmt(fund)} บาท</span>
+        </div>
+        <div class="flex justify-between border-b border-gray-200 pb-1">
+          <span class="text-gray-600">กำไรสุทธิ</span>
+          <span class="font-semibold ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}">${Utils.fmt(profit)} บาท</span>
+        </div>
+        <div class="flex justify-between border-b border-gray-200 pb-1">
+          <span class="text-gray-600">แบ่งกำไรคนละ (50/50)</span>
+          <span class="font-semibold text-indigo-600">${Utils.fmt(half)} บาท</span>
+        </div>
+      </div>
+
+      <div class="mt-3 bg-white rounded-lg shadow-sm px-3 py-2 space-y-1">
+        <div class="flex justify-between text-sm md:text-base">
+          <span class="font-medium text-gray-700">💎 ผู้ว่าจ้างได้รับสุทธิ</span>
+          <span class="font-semibold text-emerald-600">${Utils.fmt(clientNet)} บาท</span>
+        </div>
+        <div class="flex justify-between text-xs md:text-sm text-gray-600">
+          <span>ส่วนของผู้ว่าจ้าง</span><span>${Utils.fmt(half)} บาท</span>
+        </div>
+        <div class="flex justify-between text-xs md:text-sm text-gray-600">
+          <span>ส่วนของผู้ดูแลพอร์ต</span><span>${Utils.fmt(managerNet)} บาท</span>
+        </div>
+      </div>
+    `;
+    resultDiv.classList.remove('hidden');
+  }
+
+  // =======================
+  // Overview (Modal)
+  // =======================
+  function openOverview() {
+    renderOverview();
+    el('overviewModal').classList.remove('hidden');
+  }
+  function closeOverview() {
+    el('overviewModal').classList.add('hidden');
+  }
+
+  function renderOverview() {
+    const tbody = el('overviewTableBody');
+    const totalCustomersEl = el('overviewTotalCustomers');
+    const sumInitialEl = el('overviewSumInitial');
+    const sumFinalEl = el('overviewSumFinal');
+    const sumProfitEl = el('overviewSumProfit');
+
+    const index = Data.getIndex();
+    const labels = [];
+    const finalData = [];
+    const profitData = [];
+    const roiData = [];
+
+    let sumInitial = 0, sumFinal = 0, sumProfit = 0;
+
+    tbody.innerHTML = index.map((meta, idx) => {
+      const c = Data.getCustomer(meta.id);
+      const txs = (c?.transactions || []);
+      const initial = Calc.sumInitial(txs);
+      const final = Calc.computeFinalBalance(txs);
+      const profit = final - initial;
+      const roi = initial > 0 ? (profit / initial) * 100 : 0;
+
+      sumInitial += initial;
+      sumFinal += final;
+      sumProfit += profit;
+
+      labels.push(meta.name);
+      finalData.push(final);
+      profitData.push(profit);
+      roiData.push(Number.isFinite(roi) ? roi : 0);
+
+      return `
+        <tr class="border-b last:border-b-0">
+          <td class="px-2 py-1 text-xs text-gray-500">${idx + 1}</td>
+          <td class="px-2 py-1 text-xs text-gray-800 font-medium">${meta.name}</td>
+          <td class="px-2 py-1 text-xs text-right text-gray-600">${Utils.fmt(initial)}</td>
+          <td class="px-2 py-1 text-xs text-right text-gray-600">${Utils.fmt(final)}</td>
+          <td class="px-2 py-1 text-xs text-right ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}">${Utils.fmt(profit)}</td>
+          <td class="px-2 py-1 text-xs text-right ${roi >= 0 ? 'text-indigo-600' : 'text-red-600'}">${roi.toFixed(2)} %</td>
+        </tr>
+      `;
+    }).join('');
+
+    totalCustomersEl.textContent = index.length;
+    sumInitialEl.textContent = Utils.fmt(sumInitial);
+    sumFinalEl.textContent = Utils.fmt(sumFinal);
+    sumProfitEl.textContent = Utils.fmt(sumProfit);
+    sumProfitEl.className = 'text-lg font-semibold ' + (sumProfit >= 0 ? 'text-emerald-600' : 'text-red-600');
+
+    // Monthly profit
+    updateMonthlyProfit();
+
+    // Chart
+    const canvas = el('overviewChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    if (overviewChart) overviewChart.destroy();
+
+    overviewChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'มูลค่าพอร์ตรวมล่าสุด', data: finalData, backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 6, yAxisID: 'y' },
+          { label: 'กำไรสุทธิ', data: profitData, backgroundColor: 'rgba(79, 70, 229, 0.6)', borderRadius: 6, yAxisID: 'y' },
+          { type: 'line', label: 'ผลตอบแทน (%)', data: roiData, borderColor: 'rgb(249, 115, 22)', backgroundColor: 'rgba(249, 115, 22, 0.2)', tension: 0.3, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const dsLabel = context.dataset.label || '';
+                const value = context.raw;
+                if (String(dsLabel).includes('%')) return `${dsLabel}: ${Number(value).toFixed(2)} %`;
+                return `${dsLabel}: ${Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: { position: 'left', title: { display: true, text: 'มูลค่า (บาท)' }, ticks: { callback: (v) => Number(v).toLocaleString('th-TH') } },
+          y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'ผลตอบแทน (%)' }, ticks: { callback: (v) => v + '%' } }
+        }
+      }
+    });
+  }
+
+  function updateMonthlyProfit() {
+    const monthSelect = el('monthlyMonth');
+    const yearSelect  = el('monthlyYear');
+    const monthProfitEl = el('overviewMonthlyProfit');
+    const monthLabelEl  = el('overviewMonthlyLabel');
+
+    const now = new Date();
+    if (!monthSelect.value) monthSelect.value = String(now.getMonth() + 1);
+    if (!yearSelect.value) yearSelect.value = String(now.getFullYear() + 543);
+
+    const month = parseInt(monthSelect.value, 10);
+    const yearTh = parseInt(yearSelect.value, 10);
+    if (!month || !yearTh) return;
+
+    const yearAD = yearTh - 543;
+    const profit = Calc.monthlyProfitAll(yearAD, month);
+
+    monthProfitEl.textContent = Utils.fmt(profit);
+    monthProfitEl.className = 'text-lg font-semibold ' + (profit >= 0 ? 'text-rose-700' : 'text-red-600');
+
+    const names = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    monthLabelEl.textContent = `${names[month - 1]} ${yearTh}`;
+  }
+
+  // =======================
+  // CSV Export/Import
+  // =======================
+  function exportCSVCustomer() {
+    if (!currentCustomerId) return;
+    saveCurrentCustomerFromInputs();
+
+    const c = Data.getCustomer(currentCustomerId);
+    if (!c) return;
+
+    const header = ['customer_id','customer_name','date','deposit','withdraw','profit_percent','channel','detail'];
+    const lines = [header.join(',')];
+
+    for (const t of (c.transactions || [])) {
+      lines.push([
+        c.id,
+        Utils.safeCSV(c.name),
+        t.date || '',
+        Utils.toNum(t.deposit).toFixed(2),
+        Utils.toNum(t.withdraw).toFixed(2),
+        Utils.toNum(t.profitPercent).toFixed(2),
+        Utils.safeCSV(t.channel || ''),
+        Utils.safeCSV(t.detail || '')
+      ].join(','));
+    }
+
+    downloadBlob(lines.join('\n'), `alphapatra-customer-${c.id}-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
+  }
+
+  function exportCSVAll() {
+    const header = ['customer_id','customer_name','date','deposit','withdraw','profit_percent','channel','detail'];
+    const lines = [header.join(',')];
+
+    const index = Data.getIndex();
+    for (const meta of index) {
+      const c = Data.getCustomer(meta.id);
+      if (!c) continue;
+
+      for (const t of (c.transactions || [])) {
+        lines.push([
+          c.id,
+          Utils.safeCSV(c.name),
+          t.date || '',
+          Utils.toNum(t.deposit).toFixed(2),
+          Utils.toNum(t.withdraw).toFixed(2),
+          Utils.toNum(t.profitPercent).toFixed(2),
+          Utils.safeCSV(t.channel || ''),
+          Utils.safeCSV(t.detail || '')
+        ].join(','));
+      }
+    }
+
+    downloadBlob(lines.join('\n'), `alphapatra-all-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
+  }
+
+  function importCSVCustomer(file) {
+    if (!currentCustomerId) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || '');
+        const lines = text.split('\n').map(x => x.trim()).filter(Boolean);
+        if (lines.length < 2) return alert('ไฟล์ CSV ว่าง หรือรูปแบบไม่ถูกต้อง');
+
+        const header = lines[0].toLowerCase();
+        // รองรับทั้งไฟล์แบบใหม่และแบบเก่าเล็กน้อย
+        // แบบใหม่: customer_id,customer_name,date,deposit,withdraw,profit_percent,channel,detail
+        // ถ้าเป็นแบบเก่า ให้พ่อ Export จากระบบนี้ก่อนจะชัวร์ที่สุด
+
+        const txs = [];
+        for (let i = 1; i < lines.length; i++) {
+          const vals = Utils.parseCSVLine(lines[i]);
+          if (vals.length < 8) continue;
+
+          txs.push({
+            tid: Utils.id(),
+            date: vals[2] || '',
+            deposit: (vals[3] && vals[3] !== '0.00') ? vals[3] : '',
+            withdraw: (vals[4] && vals[4] !== '0.00') ? vals[4] : '',
+            profitPercent: (vals[5] && vals[5] !== '0.00') ? vals[5] : '',
+            channel: vals[6] || '',
+            detail: vals[7] || ''
+          });
+        }
+
+        if (!txs.length) return alert('ไม่พบรายการที่นำเข้าได้');
+
+        const c = Data.getCustomer(currentCustomerId);
+        if (!c) return;
+        c.transactions = txs;
+        Data.setCustomer(currentCustomerId, c);
+
+        renderTransactionTable();
+        renderCustomerGrid();
+        alert(`นำเข้าข้อมูลสำเร็จ ${txs.length} รายการ`);
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการนำเข้าไฟล์ CSV');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // =======================
+  // Export Image
+  // =======================
+  function loadHtml2Canvas() {
+    return new Promise((resolve) => {
+      if (window.html2canvas) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s.onload = resolve;
+      document.head.appendChild(s);
+    });
+  }
+
+  async function exportAsImage(format) {
+    try {
+      toggleExportMenu(false);
+
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      overlay.innerHTML = `
+        <div class="bg-white rounded-lg p-6 text-center">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p class="text-gray-700">กำลังสร้างไฟล์ภาพความละเอียดสูง...</p>
+        </div>`;
+      document.body.appendChild(overlay);
+
+      await loadHtml2Canvas();
+
+      const noPrint = document.querySelectorAll('.no-print');
+      noPrint.forEach(x => x.style.display = 'none');
+
+      const section = document.getElementById('statementSection');
+
+      const temp = document.createElement('div');
+      temp.className = 'bg-gray-50 p-4';
+
+      // clone: header + table + alpha + footer (ตามโครงหน้า statement)
+      // (ไม่ clone nav bar)
+      for (let i = 1; i < section.children.length; i++) {
+        temp.appendChild(section.children[i].cloneNode(true));
+      }
+
+      document.body.appendChild(temp);
+
+      const rect = temp.getBoundingClientRect();
+      const canvas = await html2canvas(temp, {
+        backgroundColor: '#ffffff',
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        scrollX: 0,
+        scrollY: 0,
+        width: rect.width,
+        height: rect.height,
+        windowWidth: rect.width,
+        windowHeight: rect.height
+      });
+
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `alphapatra-${currentCustomerId}-${new Date().toISOString().slice(0,10)}.${format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        noPrint.forEach(x => x.style.display = '');
+        document.body.removeChild(temp);
+        document.body.removeChild(overlay);
+      }, `image/${format}`, format === 'jpeg' ? 0.95 : 1.0);
+
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการส่งออกไฟล์ภาพ');
+    }
+  }
+
+  function toggleExportMenu(force) {
+    const menu = el('exportMenu');
+    if (typeof force === 'boolean') {
+      menu.classList.toggle('hidden', !force);
+      return;
+    }
+    menu.classList.toggle('hidden');
+  }
+
+  // =======================
+  // Logo per customer
+  // =======================
+  function loadLogoForCustomer(id) {
+    const saved = localStorage.getItem(STORAGE.logoKey(id));
+    const img = el('logoImage');
+    const txt = el('logoText');
+
+    if (saved) {
+      img.src = saved;
+      img.classList.remove('hidden');
+      txt.classList.add('hidden');
+    } else {
+      img.classList.add('hidden');
+      txt.classList.remove('hidden');
+    }
+  }
+
+  function bindLogoUpload() {
+    const container = el('logoContainer');
+    const input = el('logoInput');
+
+    container.addEventListener('click', () => input.click());
+
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) return alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+      if (file.size > 5 * 1024 * 1024) return alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (!currentCustomerId) return;
+        localStorage.setItem(STORAGE.logoKey(currentCustomerId), reader.result);
+        loadLogoForCustomer(currentCustomerId);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // =======================
+  // Bind Global Events
+  // =======================
+  function bind() {
+    // home
+    el('btnAddCustomer').addEventListener('click', addCustomer);
+    el('btnOpenOverview').addEventListener('click', openOverview);
+
+    // statement
+    el('btnBackHome').addEventListener('click', showHome);
+    el('btnRenameCustomer').addEventListener('click', () => currentCustomerId && renameCustomer(currentCustomerId));
+    el('btnDeleteCustomer').addEventListener('click', () => currentCustomerId && deleteCustomer(currentCustomerId));
+    el('btnAddRow').addEventListener('click', addRow);
+
+    // header inputs save
+    el('reportTitle').addEventListener('change', () => { saveCurrentCustomerFromInputs(); renderCustomerGrid(); });
+    el('bankName').addEventListener('change', () => { saveCurrentCustomerFromInputs(); });
+
+    // export menu
+    el('btnExportMenu').addEventListener('click', () => toggleExportMenu());
+
+    document.addEventListener('click', (e) => {
+      const menu = el('exportMenu');
+      const btn = el('btnExportMenu');
+      if (!menu.classList.contains('hidden')) {
+        const inside = menu.contains(e.target) || btn.contains(e.target);
+        if (!inside) toggleExportMenu(false);
+      }
+    });
+
+    el('btnExportPNG').addEventListener('click', () => exportAsImage('png'));
+    el('btnExportJPG').addEventListener('click', () => exportAsImage('jpeg'));
+    el('btnExportCSVCustomer').addEventListener('click', exportCSVCustomer);
+    el('btnExportCSVAll').addEventListener('click', exportCSVAll);
+    el('btnPrint').addEventListener('click', () => { toggleExportMenu(false); window.print(); });
+
+    // import
+    el('btnImportCSVCustomer').addEventListener('click', () => el('csvInputCustomer').click());
+    el('csvInputCustomer').addEventListener('change', (e) => {
+      const f = e.target.files?.[0];
+      if (f) importCSVCustomer(f);
+      e.target.value = '';
+    });
+
+    // monthly selectors
+    el('monthlyMonth').addEventListener('change', () => renderOverview());
+    el('monthlyYear').addEventListener('change', () => renderOverview());
+
+    bindLogoUpload();
+
+    // auto-save (กันพ่อเผลอปิดแท็บ)
+    setInterval(() => {
+      if (currentCustomerId) saveCurrentCustomerFromInputs();
+    }, 15000);
+  }
+
+  return {
+    bind,
+    showHome,
+    showStatement,
+    renderCustomerGrid,
+    openOverview,
+    closeOverview
+  };
+})();
+
+/** ==========================
+ *  INIT
+ *  ========================== */
+(function init() {
+  Data.ensureSeed();
+  UI.bind();
+  UI.renderCustomerGrid();
+  UI.showHome();
+})();
+</script>
+
+</body>
+</html>
