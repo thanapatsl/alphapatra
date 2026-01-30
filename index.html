@@ -10,7 +10,6 @@
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
-
     body { font-family: 'Sarabun', sans-serif; }
 
     @media print {
@@ -46,7 +45,24 @@
           </div>
           <div>
             <h1 class="text-2xl font-bold text-gray-800">ระบบจัดการลูกค้าปั้นพอร์ต AlphaPatra</h1>
-            <p class="text-gray-600">จัดการใบแสดงรายการปั้นพอร์ต และดูภาพรวมทุกพอร์ตในที่เดียว</p>
+
+            <!-- Mobile Notice -->
+            <div id="mobileNotice" style="
+              display:none;
+              margin-top:12px;
+              padding:12px;
+              border-radius:12px;
+              background:#f1f5ff;
+              color:#1e40af;
+              font-size:14px;">
+              📱 โหมดอ่านอย่างเดียวบนมือถือ  
+              <br>
+              ข้อมูลถูกเก็บแยกตามอุปกรณ์ (LocalStorage คนละเครื่องคนละข้อมูล)
+              <br>
+              ✅ ถ้าต้องการ “ดูข้อมูลบนมือถือ” ให้ Export CSV (ทั้งระบบ) จากคอม แล้วนำมา Import ที่ปุ่มด้านล่าง
+            </div>
+
+            <p class="text-gray-600 mt-2">จัดการใบแสดงรายการปั้นพอร์ต และดูภาพรวมทุกพอร์ตในที่เดียว</p>
 
             <div class="mt-3 flex flex-wrap items-center gap-4">
               <div class="flex items-center space-x-3">
@@ -72,9 +88,16 @@
           </button>
 
           <button id="btnAddCustomer"
-                  class="bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-lg transition-colors flex items-center space-x-2 shadow-lg">
+                  class="no-print bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-lg transition-colors flex items-center space-x-2 shadow-lg">
             <span>➕</span><span class="font-medium">เพิ่มลูกค้าใหม่</span>
           </button>
+
+          <!-- Mobile-only import button (to view data) -->
+          <button id="btnImportCSVAllMobile"
+                  class="hidden bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg transition-colors flex items-center space-x-2 shadow-lg">
+            <span>📥</span><span class="font-medium">Import CSV (ทั้งระบบ) เพื่อดูบนมือถือ</span>
+          </button>
+          <input type="file" id="csvInputAllMobile" accept=".csv" class="hidden">
         </div>
       </div>
 
@@ -127,8 +150,7 @@
           <div class="relative">
             <div id="logoContainer"
                  class="w-12 h-12 kbank-green rounded-lg flex items-center justify-center cursor-pointer hover:bg-green-700 transition-colors"
-                 title="คลิกเพื่ออัปโหลดโลโก้"
-            >
+                 title="คลิกเพื่ออัปโหลดโลโก้">
               <span id="logoText" class="text-white font-bold text-xl">K</span>
               <img id="logoImage" class="w-12 h-12 rounded-lg object-cover hidden" alt="Bank Logo">
             </div>
@@ -377,158 +399,124 @@
 </div>
 
 <script>
-/** ==========================
- *  STORAGE (แยกลูกค้า)
- *  ==========================
- *  INDEX:  alphapatra_v2_customers_index
- *  CUSTOMER DATA KEY: alphapatra_v2_customer_<id>
- *  CUSTOMER LOGO KEY: alphapatra_v2_customer_<id>_logo
- */
-const STORAGE = {
-  INDEX: 'alphapatra_v2_customers_index',
-  customerKey: (id) => `alphapatra_v2_customer_${id}`,
-  logoKey: (id) => `alphapatra_v2_customer_${id}_logo`
-};
+  /** ==========================
+   *  MOBILE MODE
+   *  ========================== */
+  function isMobileDevice() {
+    return window.matchMedia ? window.matchMedia("(max-width: 768px)").matches : (window.innerWidth <= 768);
+  }
+  const IS_MOBILE = isMobileDevice();
 
-const Utils = {
-  id() { return Date.now().toString(36) + Math.random().toString(36).slice(2); },
-  toNum(v) {
-    if (v === "" || v === null || v === undefined) return 0;
-    const n = (typeof v === "string") ? parseFloat(v.replace(/,/g, "")) : v;
-    return Number.isFinite(n) ? n : 0;
-  },
-  fmt(n) {
-    const num = Number(n);
-    if (!Number.isFinite(num)) return "0.00";
-    return num.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  },
-  normalizeNumber(val) {
-    if (val === "") return "";
-    const cleaned = String(val).replace(/[^0-9.]/g, "");
-    const parts = cleaned.split(".");
-    if (parts.length > 2) return parts[0] + "." + parts.slice(1).join("");
-    return cleaned;
-  },
-  safeCSV(str) {
-    const s = String(str ?? "");
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  },
-  parseCSVLine(line) {
-    const result = [];
-    let current = '';
-    let inQuotes = false;
+  /** ==========================
+   *  STORAGE (แยกลูกค้า)
+   *  ==========================
+   *  INDEX:  alphapatra_v2_customers_index
+   *  CUSTOMER DATA KEY: alphapatra_v2_customer_<id>
+   *  CUSTOMER LOGO KEY: alphapatra_v2_customer_<id>_logo
+   */
+  const STORAGE = {
+    INDEX: 'alphapatra_v2_customers_index',
+    customerKey: (id) => `alphapatra_v2_customer_${id}`,
+    logoKey: (id) => `alphapatra_v2_customer_${id}_logo`
+  };
 
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (c === ',' && !inQuotes) {
-        result.push(current); current = '';
-      } else {
-        current += c;
+  const Utils = {
+    id() { return Date.now().toString(36) + Math.random().toString(36).slice(2); },
+    toNum(v) {
+      if (v === "" || v === null || v === undefined) return 0;
+      const n = (typeof v === "string") ? parseFloat(v.replace(/,/g, "")) : v;
+      return Number.isFinite(n) ? n : 0;
+    },
+    fmt(n) {
+      const num = Number(n);
+      if (!Number.isFinite(num)) return "0.00";
+      return num.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    normalizeNumber(val) {
+      if (val === "") return "";
+      const cleaned = String(val).replace(/[^0-9.]/g, "");
+      const parts = cleaned.split(".");
+      if (parts.length > 2) return parts[0] + "." + parts.slice(1).join("");
+      return cleaned;
+    },
+    safeCSV(str) {
+      const s = String(str ?? "");
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    },
+    parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (c === ',' && !inQuotes) {
+          result.push(current); current = '';
+        } else {
+          current += c;
+        }
       }
+      result.push(current);
+      return result;
     }
-    result.push(current);
-    return result;
-  }
-};
+  };
 
-const Data = {
-  getIndex() {
-    const raw = localStorage.getItem(STORAGE.INDEX);
-    if (!raw) return [];
-    try { return JSON.parse(raw) || []; } catch { return []; }
-  },
-  setIndex(list) {
-    localStorage.setItem(STORAGE.INDEX, JSON.stringify(list));
-  },
-  getCustomer(id) {
-    const raw = localStorage.getItem(STORAGE.customerKey(id));
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
-  },
-  setCustomer(id, obj) {
-    obj.updatedAt = Date.now();
-    localStorage.setItem(STORAGE.customerKey(id), JSON.stringify(obj));
-  },
-  deleteCustomer(id) {
-    localStorage.removeItem(STORAGE.customerKey(id));
-    localStorage.removeItem(STORAGE.logoKey(id));
-    const list = Data.getIndex().filter(x => x.id !== id);
-    Data.setIndex(list);
-  },
-  ensureSeed() {
-    let index = Data.getIndex();
-    if (index.length) return;
+  const Data = {
+    getIndex() {
+      const raw = localStorage.getItem(STORAGE.INDEX);
+      if (!raw) return [];
+      try { return JSON.parse(raw) || []; } catch { return []; }
+    },
+    setIndex(list) {
+      localStorage.setItem(STORAGE.INDEX, JSON.stringify(list));
+    },
+    getCustomer(id) {
+      const raw = localStorage.getItem(STORAGE.customerKey(id));
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    },
+    setCustomer(id, obj) {
+      obj.updatedAt = Date.now();
+      localStorage.setItem(STORAGE.customerKey(id), JSON.stringify(obj));
+    },
+    deleteCustomer(id) {
+      localStorage.removeItem(STORAGE.customerKey(id));
+      localStorage.removeItem(STORAGE.logoKey(id));
+      const list = Data.getIndex().filter(x => x.id !== id);
+      Data.setIndex(list);
+    },
+    ensureSeed() {
+      let index = Data.getIndex();
+      if (index.length) return;
 
-    const id = 1;
-    const seedMeta = { id, name: "ลูกค้าคนที่ 1", createdAt: Date.now(), updatedAt: Date.now() };
-    const seedData = {
-      id,
-      name: seedMeta.name,
-      reportTitle: "ใบแสดงรายการปั้นพอร์ต",
-      bankName: "ธนาคารกสิกรไทย",
-      accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
-      transactions: [
-        { tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }
-      ],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
+      const id = 1;
+      const seedMeta = { id, name: "ลูกค้าคนที่ 1", createdAt: Date.now(), updatedAt: Date.now() };
+      const seedData = {
+        id,
+        name: seedMeta.name,
+        reportTitle: "ใบแสดงรายการปั้นพอร์ต",
+        bankName: "ธนาคารกสิกรไทย",
+        accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
+        transactions: [
+          { tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }
+        ],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
 
-    Data.setIndex([seedMeta]);
-    Data.setCustomer(id, seedData);
-  }
-};
-
-const Calc = {
-  computeFinalBalance(transactions) {
-    let running = 0;
-    for (const t of transactions) {
-      const dep = Utils.toNum(t.deposit);
-      const wdr = Utils.toNum(t.withdraw);
-      const pct = Utils.toNum(t.profitPercent);
-
-      const base = running;
-      const profit = pct !== 0 ? base * (pct / 100) : 0;
-
-      running = base + dep - wdr + profit;
+      Data.setIndex([seedMeta]);
+      Data.setCustomer(id, seedData);
     }
-    return running;
-  },
-  computeBalancesWithProfit(transactions) {
-    let running = 0;
-    const balances = [];
-    const profitAmounts = [];
-    for (let i = 0; i < transactions.length; i++) {
-      const t = transactions[i];
-      const dep = Utils.toNum(t.deposit);
-      const wdr = Utils.toNum(t.withdraw);
-      const pct = Utils.toNum(t.profitPercent);
+  };
 
-      const base = running;
-      const profit = pct !== 0 ? base * (pct / 100) : 0;
-
-      running = base + dep - wdr + profit;
-      balances[i] = running;
-      profitAmounts[i] = profit;
-    }
-    return { balances, profitAmounts, finalBalance: running };
-  },
-  sumInitial(transactions) {
-    return transactions.reduce((s, t) => s + Utils.toNum(t.deposit), 0);
-  },
-  monthlyProfitAll(yearAD, month1to12) {
-    let total = 0;
-    const index = Data.getIndex();
-    for (const meta of index) {
-      const c = Data.getCustomer(meta.id);
-      if (!c) continue;
-
+  const Calc = {
+    computeFinalBalance(transactions) {
       let running = 0;
-      for (const t of (c.transactions || [])) {
+      for (const t of transactions) {
         const dep = Utils.toNum(t.deposit);
         const wdr = Utils.toNum(t.withdraw);
         const pct = Utils.toNum(t.profitPercent);
@@ -536,588 +524,609 @@ const Calc = {
         const base = running;
         const profit = pct !== 0 ? base * (pct / 100) : 0;
 
-        if (t.date) {
-          const d = new Date(t.date);
-          if (!Number.isNaN(d.getTime())) {
-            const y = d.getFullYear();
-            const m = d.getMonth() + 1;
-            if (y === yearAD && m === month1to12) total += profit;
-          }
-        }
         running = base + dep - wdr + profit;
       }
-    }
-    return total;
-  }
-};
-
-const UI = (() => {
-  let currentCustomerId = null;
-  let overviewChart = null;
-
-  const el = (id) => document.getElementById(id);
-
-  function showHome() {
-    el('statementSection').classList.add('hidden');
-    el('customerListSection').classList.remove('hidden');
-    currentCustomerId = null;
-    renderCustomerGrid();
-  }
-
-  function showStatement(id) {
-    currentCustomerId = id;
-    el('customerListSection').classList.add('hidden');
-    el('statementSection').classList.remove('hidden');
-
-    const c = Data.getCustomer(id);
-    if (!c) return showHome();
-
-    el('currentCustomerName').textContent = c.name;
-    el('reportTitle').value = c.reportTitle || "ใบแสดงรายการปั้นพอร์ต";
-    el('bankName').value = c.bankName || c.name || "";
-    el('accountNo').value = c.accountNo || "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)";
-
-    loadLogoForCustomer(id);
-    renderTransactionTable();
-  }
-
-  function renderCustomerGrid() {
-    const grid = el('customerGrid');
-    const index = Data.getIndex();
-
-    el('customerCount').textContent = index.length;
-
-    // total all accounts
-    let total = 0;
-    for (const meta of index) {
-      const c = Data.getCustomer(meta.id);
-      if (!c) continue;
-      total += Calc.computeFinalBalance(c.transactions || []);
-    }
-    const totalEl = el('totalAllAccounts');
-    totalEl.textContent = Utils.fmt(total);
-    totalEl.className = (total >= 0)
-      ? 'bg-gradient-to-r from-green-500 to-blue-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg'
-      : 'bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg';
-
-    grid.innerHTML = index.map((meta, i) => {
-      const c = Data.getCustomer(meta.id);
-      const txs = (c?.transactions || []);
-      const bal = Calc.computeFinalBalance(txs);
-      return `
-        <div class="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-blue-300 cursor-pointer group"
-             data-open="${meta.id}">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center text-base font-bold shadow-lg">
-                ${i + 1}
-              </div>
-              <div>
-                <div class="font-bold text-gray-800 text-base group-hover:text-blue-600 transition-colors line-clamp-1">${meta.name}</div>
-                <div class="text-xs text-gray-500">ID: ${meta.id}</div>
-              </div>
-            </div>
-            <div class="flex space-x-1">
-              <button class="btnRename text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-sm" data-rename="${meta.id}" title="เปลี่ยนชื่อ">✏️</button>
-              ${index.length > 1 ? `<button class="btnDelete text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors text-sm" data-delete="${meta.id}" title="ลบลูกค้า">🗑️</button>` : ''}
-            </div>
-          </div>
-
-          <div class="border-t border-gray-200 pt-3 space-y-1">
-            <div class="flex items-center justify-between text-xs text-gray-600">
-              <span>รายการทั้งหมด</span><span class="font-semibold">${txs.length} รายการ</span>
-            </div>
-            <div class="flex items-center justify-between text-xs text-gray-600">
-              <span>ยอดคงเหลือ</span>
-              <span class="font-bold ${bal >= 0 ? 'text-green-600' : 'text-red-600'}">${Utils.fmt(bal)}</span>
-            </div>
-            <div class="flex items-center justify-between text-xs text-gray-500">
-              <span>อัปเดตล่าสุด</span>
-              <span>${new Date(meta.updatedAt || Date.now()).toLocaleDateString('th-TH')}</span>
-            </div>
-          </div>
-
-          <div class="mt-3 flex items-center justify-center">
-            <div class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium group-hover:bg-green-200 transition-colors">
-              📄 ดูใบแสดงรายการ
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // bind clicks
-    grid.querySelectorAll('[data-open]').forEach(card => {
-      card.addEventListener('click', () => showStatement(parseInt(card.getAttribute('data-open'), 10)));
-    });
-    grid.querySelectorAll('[data-rename]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        renameCustomer(parseInt(btn.getAttribute('data-rename'), 10));
-      });
-    });
-    grid.querySelectorAll('[data-delete]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteCustomer(parseInt(btn.getAttribute('data-delete'), 10));
-      });
-    });
-  }
-
-  function addCustomer() {
-    const index = Data.getIndex();
-    const nextId = (index.reduce((m, x) => Math.max(m, x.id), 0) || 0) + 1;
-    const name = prompt('ชื่อลูกค้าใหม่:', `ลูกค้าคนที่ ${nextId}`);
-    if (!name || !name.trim()) return;
-
-    const meta = { id: nextId, name: name.trim(), createdAt: Date.now(), updatedAt: Date.now() };
-    const data = {
-      id: nextId,
-      name: meta.name,
-      reportTitle: "ใบแสดงรายการปั้นพอร์ต",
-      bankName: meta.name,
-      accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
-      transactions: [{ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-
-    Data.setIndex([...index, meta]);
-    Data.setCustomer(nextId, data);
-    renderCustomerGrid();
-    showStatement(nextId);
-  }
-
-  function renameCustomer(id) {
-    const index = Data.getIndex();
-    const meta = index.find(x => x.id === id);
-    if (!meta) return;
-
-    const newName = prompt('ชื่อใหม่:', meta.name);
-    if (!newName || !newName.trim() || newName.trim() === meta.name) return;
-
-    meta.name = newName.trim();
-    meta.updatedAt = Date.now();
-    Data.setIndex(index);
-
-    const c = Data.getCustomer(id);
-    if (c) {
-      c.name = meta.name;
-      // bankName ให้คงตามเดิม (บางบ้านอยากให้เป็นชื่อธนาคาร) แต่ถ้าอยากตามชื่อก็ uncomment บรรทัดล่าง
-      // c.bankName = meta.name;
-      Data.setCustomer(id, c);
-    }
-    renderCustomerGrid();
-    if (currentCustomerId === id) el('currentCustomerName').textContent = meta.name;
-  }
-
-  function deleteCustomer(id) {
-    const index = Data.getIndex();
-    if (index.length <= 1) return alert('ต้องมีลูกค้าอย่างน้อย 1 คน');
-
-    const meta = index.find(x => x.id === id);
-    if (!meta) return;
-
-    if (!confirm(`ต้องการลบลูกค้า "${meta.name}" หรือไม่?\n\nข้อมูลทั้งหมดของลูกค้าจะถูกลบอย่างถาวร`)) return;
-
-    Data.deleteCustomer(id);
-
-    if (currentCustomerId === id) showHome();
-    else renderCustomerGrid();
-  }
-
-  function saveCurrentCustomerFromInputs() {
-    if (!currentCustomerId) return;
-    const c = Data.getCustomer(currentCustomerId);
-    if (!c) return;
-
-    c.reportTitle = el('reportTitle').value || "ใบแสดงรายการปั้นพอร์ต";
-    c.bankName = el('bankName').value || c.name || "";
-    // accountNo เป็น readonly แต่เก็บไว้เผื่ออนาคต
-    c.accountNo = el('accountNo').value || c.accountNo;
-
-    Data.setCustomer(currentCustomerId, c);
-
-    // bump meta updatedAt
-    const index = Data.getIndex();
-    const meta = index.find(x => x.id === currentCustomerId);
-    if (meta) {
-      meta.updatedAt = Date.now();
-      meta.name = c.name || meta.name;
-      Data.setIndex(index);
-    }
-  }
-
-  function renderTransactionTable() {
-    if (!currentCustomerId) return;
-    const c = Data.getCustomer(currentCustomerId);
-    if (!c) return;
-
-    const txs = c.transactions || [];
-    const tbody = el('transactionTable');
-
-    // compute
-    const initial = Calc.sumInitial(txs);
-    const { balances, profitAmounts, finalBalance } = Calc.computeBalancesWithProfit(txs);
-
-    el('initialInvestment').textContent = Utils.fmt(initial);
-    el('finalBalance').textContent = Utils.fmt(finalBalance);
-    el('finalBalance').className = (finalBalance >= 0)
-      ? 'w-64 p-3 bg-green-50 border-2 border-green-300 rounded-lg text-center font-bold text-lg text-green-700'
-      : 'w-64 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-center font-bold text-lg text-red-700';
-
-    // AlphaProfit
-    el('ap_total').value = finalBalance ? finalBalance.toFixed(2) : '';
-    el('ap_fund').value = initial ? initial.toFixed(2) : '';
-    updateAlphaProfit(finalBalance, initial);
-
-    // render rows
-    tbody.innerHTML = txs.map((t, i) => {
-      const bal = balances[i] ?? 0;
-      const pAmt = profitAmounts[i] ?? 0;
-
-      return `
-        <tr class="hover:bg-gray-50">
-          <td class="px-3 py-4 whitespace-nowrap">
-            <input type="date" value="${t.date || ''}"
-                   data-i="${i}" data-f="date"
-                   class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
-          </td>
-
-          <td class="px-3 py-4 whitespace-nowrap text-right">
-            <input type="text" value="${t.deposit || ''}" placeholder="0.00"
-                   data-i="${i}" data-f="deposit"
-                   class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
-            <div class="text-xs text-blue-600 mt-1">${t.deposit ? Utils.fmt(Utils.toNum(t.deposit)) : ''}</div>
-          </td>
-
-          <td class="px-3 py-4 whitespace-nowrap text-right">
-            <input type="text" value="${t.withdraw || ''}" placeholder="0.00"
-                   data-i="${i}" data-f="withdraw"
-                   class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
-            <div class="text-xs text-red-600 mt-1">${t.withdraw ? Utils.fmt(Utils.toNum(t.withdraw)) : ''}</div>
-          </td>
-
-          <td class="px-3 py-4 whitespace-nowrap text-right">
-            <input type="text" value="${t.profitPercent || ''}" placeholder="0"
-                   data-i="${i}" data-f="profitPercent"
-                   class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
-            <div class="text-xs text-gray-600 mt-1">${t.profitPercent ? (t.profitPercent + ' %') : ''}</div>
-          </td>
-
-          <td class="px-3 py-4 whitespace-nowrap text-right">
-            <div class="w-full p-1 border border-gray-100 rounded bg-gray-50 text-right text-green-700">
-              ${pAmt ? Utils.fmt(pAmt) : ''}
-            </div>
-          </td>
-
-          <td class="px-3 py-4">
-            <input type="text" value="${t.channel || ''}" placeholder=""
-                   data-i="${i}" data-f="channel"
-                   class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
-          </td>
-
-          <td class="px-3 py-4 whitespace-nowrap text-right font-medium ${bal >= 0 ? 'text-green-600' : 'text-red-600'}">
-            ${Utils.fmt(bal)}
-          </td>
-
-          <td class="px-3 py-4">
-            <input type="text" value="${t.detail || ''}" placeholder=""
-                   data-i="${i}" data-f="detail"
-                   class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
-          </td>
-
-          <td class="px-3 py-4 whitespace-nowrap text-center no-print">
-            <button class="btnInsert text-blue-600 hover:text-blue-800 mr-2" data-insert="${i}" title="เพิ่มแถวใหม่">➕</button>
-            <button class="btnRemove text-red-600 hover:text-red-800" data-remove="${i}" title="ลบแถว">🗑️</button>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    // bind inputs
-    tbody.querySelectorAll('input[data-i]').forEach(inp => {
-      inp.addEventListener('change', () => {
-        const i = parseInt(inp.getAttribute('data-i'), 10);
-        const f = inp.getAttribute('data-f');
-        let v = inp.value;
-
-        if (['deposit','withdraw','profitPercent'].includes(f)) v = Utils.normalizeNumber(v);
-
-        const c2 = Data.getCustomer(currentCustomerId);
-        if (!c2) return;
-        c2.transactions[i][f] = v;
-        Data.setCustomer(currentCustomerId, c2);
-
-        // refresh
-        renderTransactionTable();
-        renderCustomerGrid(); // update totals card
-      });
-    });
-
-    // bind buttons
-    tbody.querySelectorAll('[data-insert]').forEach(btn => {
-      btn.addEventListener('click', () => insertRow(parseInt(btn.getAttribute('data-insert'), 10)));
-    });
-    tbody.querySelectorAll('[data-remove]').forEach(btn => {
-      btn.addEventListener('click', () => removeRow(parseInt(btn.getAttribute('data-remove'), 10)));
-    });
-
-    // persist header fields too
-    saveCurrentCustomerFromInputs();
-  }
-
-  function addRow() {
-    if (!currentCustomerId) return;
-    const c = Data.getCustomer(currentCustomerId);
-    if (!c) return;
-
-    c.transactions.push({ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" });
-    Data.setCustomer(currentCustomerId, c);
-    renderTransactionTable();
-    renderCustomerGrid();
-  }
-
-  function insertRow(i) {
-    if (!currentCustomerId) return;
-    const c = Data.getCustomer(currentCustomerId);
-    if (!c) return;
-
-    c.transactions.splice(i + 1, 0, { tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" });
-    Data.setCustomer(currentCustomerId, c);
-    renderTransactionTable();
-    renderCustomerGrid();
-  }
-
-  function removeRow(i) {
-    if (!currentCustomerId) return;
-    const c = Data.getCustomer(currentCustomerId);
-    if (!c) return;
-
-    if ((c.transactions || []).length <= 1) return alert('ต้องมีรายการอย่างน้อย 1 รายการ');
-    c.transactions.splice(i, 1);
-    Data.setCustomer(currentCustomerId, c);
-    renderTransactionTable();
-    renderCustomerGrid();
-  }
-
-  function updateAlphaProfit(total, fund) {
-    const resultDiv = el('ap_result');
-    if (!resultDiv) return;
-
-    if ((total === 0 && fund === 0) || (!Number.isFinite(total) && !Number.isFinite(fund))) {
-      resultDiv.classList.add('hidden');
-      return;
-    }
-
-    const profit = total - fund;
-    const half = profit / 2;
-    const clientNet = fund + half;
-    const managerNet = half;
-
-    resultDiv.innerHTML = `
-      <h4 class="text-base md:text-lg font-semibold text-gray-800 mb-3 text-center">📑 สรุปผลการแบ่งกำไร</h4>
-      <div class="space-y-2 text-sm md:text-base">
-        <div class="flex justify-between border-b border-gray-200 pb-1">
-          <span class="text-gray-600">ยอดรวมทั้งหมด</span>
-          <span class="font-semibold text-gray-800">${Utils.fmt(total)} บาท</span>
-        </div>
-        <div class="flex justify-between border-b border-gray-200 pb-1">
-          <span class="text-gray-600">เงินทุนลูกค้า</span>
-          <span class="font-semibold text-gray-800">${Utils.fmt(fund)} บาท</span>
-        </div>
-        <div class="flex justify-between border-b border-gray-200 pb-1">
-          <span class="text-gray-600">กำไรสุทธิ</span>
-          <span class="font-semibold ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}">${Utils.fmt(profit)} บาท</span>
-        </div>
-        <div class="flex justify-between border-b border-gray-200 pb-1">
-          <span class="text-gray-600">แบ่งกำไรคนละ (50/50)</span>
-          <span class="font-semibold text-indigo-600">${Utils.fmt(half)} บาท</span>
-        </div>
-      </div>
-
-      <div class="mt-3 bg-white rounded-lg shadow-sm px-3 py-2 space-y-1">
-        <div class="flex justify-between text-sm md:text-base">
-          <span class="font-medium text-gray-700">💎 ผู้ว่าจ้างได้รับสุทธิ</span>
-          <span class="font-semibold text-emerald-600">${Utils.fmt(clientNet)} บาท</span>
-        </div>
-        <div class="flex justify-between text-xs md:text-sm text-gray-600">
-          <span>ส่วนของผู้ว่าจ้าง</span><span>${Utils.fmt(half)} บาท</span>
-        </div>
-        <div class="flex justify-between text-xs md:text-sm text-gray-600">
-          <span>ส่วนของผู้ดูแลพอร์ต</span><span>${Utils.fmt(managerNet)} บาท</span>
-        </div>
-      </div>
-    `;
-    resultDiv.classList.remove('hidden');
-  }
-
-  // =======================
-  // Overview (Modal)
-  // =======================
-  function openOverview() {
-    renderOverview();
-    el('overviewModal').classList.remove('hidden');
-  }
-  function closeOverview() {
-    el('overviewModal').classList.add('hidden');
-  }
-
-  function renderOverview() {
-    const tbody = el('overviewTableBody');
-    const totalCustomersEl = el('overviewTotalCustomers');
-    const sumInitialEl = el('overviewSumInitial');
-    const sumFinalEl = el('overviewSumFinal');
-    const sumProfitEl = el('overviewSumProfit');
-
-    const index = Data.getIndex();
-    const labels = [];
-    const finalData = [];
-    const profitData = [];
-    const roiData = [];
-
-    let sumInitial = 0, sumFinal = 0, sumProfit = 0;
-
-    tbody.innerHTML = index.map((meta, idx) => {
-      const c = Data.getCustomer(meta.id);
-      const txs = (c?.transactions || []);
-      const initial = Calc.sumInitial(txs);
-      const final = Calc.computeFinalBalance(txs);
-      const profit = final - initial;
-      const roi = initial > 0 ? (profit / initial) * 100 : 0;
-
-      sumInitial += initial;
-      sumFinal += final;
-      sumProfit += profit;
-
-      labels.push(meta.name);
-      finalData.push(final);
-      profitData.push(profit);
-      roiData.push(Number.isFinite(roi) ? roi : 0);
-
-      return `
-        <tr class="border-b last:border-b-0">
-          <td class="px-2 py-1 text-xs text-gray-500">${idx + 1}</td>
-          <td class="px-2 py-1 text-xs text-gray-800 font-medium">${meta.name}</td>
-          <td class="px-2 py-1 text-xs text-right text-gray-600">${Utils.fmt(initial)}</td>
-          <td class="px-2 py-1 text-xs text-right text-gray-600">${Utils.fmt(final)}</td>
-          <td class="px-2 py-1 text-xs text-right ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}">${Utils.fmt(profit)}</td>
-          <td class="px-2 py-1 text-xs text-right ${roi >= 0 ? 'text-indigo-600' : 'text-red-600'}">${roi.toFixed(2)} %</td>
-        </tr>
-      `;
-    }).join('');
-
-    totalCustomersEl.textContent = index.length;
-    sumInitialEl.textContent = Utils.fmt(sumInitial);
-    sumFinalEl.textContent = Utils.fmt(sumFinal);
-    sumProfitEl.textContent = Utils.fmt(sumProfit);
-    sumProfitEl.className = 'text-lg font-semibold ' + (sumProfit >= 0 ? 'text-emerald-600' : 'text-red-600');
-
-    // Monthly profit
-    updateMonthlyProfit();
-
-    // Chart
-    const canvas = el('overviewChart');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    if (overviewChart) overviewChart.destroy();
-
-    overviewChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'มูลค่าพอร์ตรวมล่าสุด', data: finalData, backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 6, yAxisID: 'y' },
-          { label: 'กำไรสุทธิ', data: profitData, backgroundColor: 'rgba(79, 70, 229, 0.6)', borderRadius: 6, yAxisID: 'y' },
-          { type: 'line', label: 'ผลตอบแทน (%)', data: roiData, borderColor: 'rgb(249, 115, 22)', backgroundColor: 'rgba(249, 115, 22, 0.2)', tension: 0.3, yAxisID: 'y1' }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom' },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const dsLabel = context.dataset.label || '';
-                const value = context.raw;
-                if (String(dsLabel).includes('%')) return `${dsLabel}: ${Number(value).toFixed(2)} %`;
-                return `${dsLabel}: ${Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
-              }
+      return running;
+    },
+    computeBalancesWithProfit(transactions) {
+      let running = 0;
+      const balances = [];
+      const profitAmounts = [];
+      for (let i = 0; i < transactions.length; i++) {
+        const t = transactions[i];
+        const dep = Utils.toNum(t.deposit);
+        const wdr = Utils.toNum(t.withdraw);
+        const pct = Utils.toNum(t.profitPercent);
+
+        const base = running;
+        const profit = pct !== 0 ? base * (pct / 100) : 0;
+
+        running = base + dep - wdr + profit;
+        balances[i] = running;
+        profitAmounts[i] = profit;
+      }
+      return { balances, profitAmounts, finalBalance: running };
+    },
+    sumInitial(transactions) {
+      return transactions.reduce((s, t) => s + Utils.toNum(t.deposit), 0);
+    },
+    monthlyProfitAll(yearAD, month1to12) {
+      let total = 0;
+      const index = Data.getIndex();
+      for (const meta of index) {
+        const c = Data.getCustomer(meta.id);
+        if (!c) continue;
+
+        let running = 0;
+        for (const t of (c.transactions || [])) {
+          const dep = Utils.toNum(t.deposit);
+          const wdr = Utils.toNum(t.withdraw);
+          const pct = Utils.toNum(t.profitPercent);
+
+          const base = running;
+          const profit = pct !== 0 ? base * (pct / 100) : 0;
+
+          if (t.date) {
+            const d = new Date(t.date);
+            if (!Number.isNaN(d.getTime())) {
+              const y = d.getFullYear();
+              const m = d.getMonth() + 1;
+              if (y === yearAD && m === month1to12) total += profit;
             }
           }
-        },
-        scales: {
-          y: { position: 'left', title: { display: true, text: 'มูลค่า (บาท)' }, ticks: { callback: (v) => Number(v).toLocaleString('th-TH') } },
-          y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'ผลตอบแทน (%)' }, ticks: { callback: (v) => v + '%' } }
+          running = base + dep - wdr + profit;
         }
       }
-    });
-  }
+      return total;
+    }
+  };
 
-  function updateMonthlyProfit() {
-    const monthSelect = el('monthlyMonth');
-    const yearSelect  = el('monthlyYear');
-    const monthProfitEl = el('overviewMonthlyProfit');
-    const monthLabelEl  = el('overviewMonthlyLabel');
+  const UI = (() => {
+    let currentCustomerId = null;
+    let overviewChart = null;
 
-    const now = new Date();
-    if (!monthSelect.value) monthSelect.value = String(now.getMonth() + 1);
-    if (!yearSelect.value) yearSelect.value = String(now.getFullYear() + 543);
+    const el = (id) => document.getElementById(id);
 
-    const month = parseInt(monthSelect.value, 10);
-    const yearTh = parseInt(yearSelect.value, 10);
-    if (!month || !yearTh) return;
-
-    const yearAD = yearTh - 543;
-    const profit = Calc.monthlyProfitAll(yearAD, month);
-
-    monthProfitEl.textContent = Utils.fmt(profit);
-    monthProfitEl.className = 'text-lg font-semibold ' + (profit >= 0 ? 'text-rose-700' : 'text-red-600');
-
-    const names = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    monthLabelEl.textContent = `${names[month - 1]} ${yearTh}`;
-  }
-
-  // =======================
-  // CSV Export/Import
-  // =======================
-  function exportCSVCustomer() {
-    if (!currentCustomerId) return;
-    saveCurrentCustomerFromInputs();
-
-    const c = Data.getCustomer(currentCustomerId);
-    if (!c) return;
-
-    const header = ['customer_id','customer_name','date','deposit','withdraw','profit_percent','channel','detail'];
-    const lines = [header.join(',')];
-
-    for (const t of (c.transactions || [])) {
-      lines.push([
-        c.id,
-        Utils.safeCSV(c.name),
-        t.date || '',
-        Utils.toNum(t.deposit).toFixed(2),
-        Utils.toNum(t.withdraw).toFixed(2),
-        Utils.toNum(t.profitPercent).toFixed(2),
-        Utils.safeCSV(t.channel || ''),
-        Utils.safeCSV(t.detail || '')
-      ].join(','));
+    function showHome() {
+      el('statementSection').classList.add('hidden');
+      el('customerListSection').classList.remove('hidden');
+      currentCustomerId = null;
+      renderCustomerGrid();
     }
 
-    downloadBlob(lines.join('\n'), `alphapatra-customer-${c.id}-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
-  }
+    function showStatement(id) {
+      currentCustomerId = id;
+      el('customerListSection').classList.add('hidden');
+      el('statementSection').classList.remove('hidden');
 
-  function exportCSVAll() {
-    const header = ['customer_id','customer_name','date','deposit','withdraw','profit_percent','channel','detail'];
-    const lines = [header.join(',')];
+      const c = Data.getCustomer(id);
+      if (!c) return showHome();
 
-    const index = Data.getIndex();
-    for (const meta of index) {
-      const c = Data.getCustomer(meta.id);
-      if (!c) continue;
+      el('currentCustomerName').textContent = c.name;
+      el('reportTitle').value = c.reportTitle || "ใบแสดงรายการปั้นพอร์ต";
+      el('bankName').value = c.bankName || c.name || "";
+      el('accountNo').value = c.accountNo || "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)";
+
+      loadLogoForCustomer(id);
+      renderTransactionTable();
+      applyMobileReadOnly(); // ปรับโหมดมือถือในหน้า statement ด้วย
+    }
+
+    function renderCustomerGrid() {
+      const grid = el('customerGrid');
+      const index = Data.getIndex();
+
+      el('customerCount').textContent = index.length;
+
+      let total = 0;
+      for (const meta of index) {
+        const c = Data.getCustomer(meta.id);
+        if (!c) continue;
+        total += Calc.computeFinalBalance(c.transactions || []);
+      }
+      const totalEl = el('totalAllAccounts');
+      totalEl.textContent = Utils.fmt(total);
+      totalEl.className = (total >= 0)
+        ? 'bg-gradient-to-r from-green-500 to-blue-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg'
+        : 'bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-lg font-bold text-lg shadow-lg';
+
+      grid.innerHTML = index.map((meta, i) => {
+        const c = Data.getCustomer(meta.id);
+        const txs = (c?.transactions || []);
+        const bal = Calc.computeFinalBalance(txs);
+        return `
+          <div class="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-blue-300 cursor-pointer group"
+               data-open="${meta.id}">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full flex items-center justify-center text-base font-bold shadow-lg">
+                  ${i + 1}
+                </div>
+                <div>
+                  <div class="font-bold text-gray-800 text-base group-hover:text-blue-600 transition-colors line-clamp-1">${meta.name}</div>
+                  <div class="text-xs text-gray-500">ID: ${meta.id}</div>
+                </div>
+              </div>
+              <div class="flex space-x-1">
+                <button class="btnRename text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-sm no-print"
+                        data-rename="${meta.id}" title="เปลี่ยนชื่อ">✏️</button>
+                ${index.length > 1 ? `<button class="btnDelete text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors text-sm no-print"
+                        data-delete="${meta.id}" title="ลบลูกค้า">🗑️</button>` : ''}
+              </div>
+            </div>
+
+            <div class="border-t border-gray-200 pt-3 space-y-1">
+              <div class="flex items-center justify-between text-xs text-gray-600">
+                <span>รายการทั้งหมด</span><span class="font-semibold">${txs.length} รายการ</span>
+              </div>
+              <div class="flex items-center justify-between text-xs text-gray-600">
+                <span>ยอดคงเหลือ</span>
+                <span class="font-bold ${bal >= 0 ? 'text-green-600' : 'text-red-600'}">${Utils.fmt(bal)}</span>
+              </div>
+              <div class="flex items-center justify-between text-xs text-gray-500">
+                <span>อัปเดตล่าสุด</span>
+                <span>${new Date(meta.updatedAt || Date.now()).toLocaleDateString('th-TH')}</span>
+              </div>
+            </div>
+
+            <div class="mt-3 flex items-center justify-center">
+              <div class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium group-hover:bg-green-200 transition-colors">
+                📄 ดูใบแสดงรายการ
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // bind clicks
+      grid.querySelectorAll('[data-open]').forEach(card => {
+        card.addEventListener('click', () => showStatement(parseInt(card.getAttribute('data-open'), 10)));
+      });
+      grid.querySelectorAll('[data-rename]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+          renameCustomer(parseInt(btn.getAttribute('data-rename'), 10));
+        });
+      });
+      grid.querySelectorAll('[data-delete]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+          deleteCustomer(parseInt(btn.getAttribute('data-delete'), 10));
+        });
+      });
+
+      applyMobileReadOnly(); // เผื่อกลับหน้าแรก
+    }
+
+    function addCustomer() {
+      if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว\nให้เพิ่มลูกค้าบนคอมพิวเตอร์');
+      const index = Data.getIndex();
+      const nextId = (index.reduce((m, x) => Math.max(m, x.id), 0) || 0) + 1;
+      const name = prompt('ชื่อลูกค้าใหม่:', `ลูกค้าคนที่ ${nextId}`);
+      if (!name || !name.trim()) return;
+
+      const meta = { id: nextId, name: name.trim(), createdAt: Date.now(), updatedAt: Date.now() };
+      const data = {
+        id: nextId,
+        name: meta.name,
+        reportTitle: "ใบแสดงรายการปั้นพอร์ต",
+        bankName: meta.name,
+        accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
+        transactions: [{ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      Data.setIndex([...index, meta]);
+      Data.setCustomer(nextId, data);
+      renderCustomerGrid();
+      showStatement(nextId);
+    }
+
+    function renameCustomer(id) {
+      if (IS_MOBILE) return;
+      const index = Data.getIndex();
+      const meta = index.find(x => x.id === id);
+      if (!meta) return;
+
+      const newName = prompt('ชื่อใหม่:', meta.name);
+      if (!newName || !newName.trim() || newName.trim() === meta.name) return;
+
+      meta.name = newName.trim();
+      meta.updatedAt = Date.now();
+      Data.setIndex(index);
+
+      const c = Data.getCustomer(id);
+      if (c) {
+        c.name = meta.name;
+        Data.setCustomer(id, c);
+      }
+      renderCustomerGrid();
+      if (currentCustomerId === id) el('currentCustomerName').textContent = meta.name;
+    }
+
+    function deleteCustomer(id) {
+      if (IS_MOBILE) return;
+      const index = Data.getIndex();
+      if (index.length <= 1) return alert('ต้องมีลูกค้าอย่างน้อย 1 คน');
+
+      const meta = index.find(x => x.id === id);
+      if (!meta) return;
+
+      if (!confirm(`ต้องการลบลูกค้า "${meta.name}" หรือไม่?\n\nข้อมูลทั้งหมดของลูกค้าจะถูกลบอย่างถาวร`)) return;
+
+      Data.deleteCustomer(id);
+
+      if (currentCustomerId === id) showHome();
+      else renderCustomerGrid();
+    }
+
+    function saveCurrentCustomerFromInputs() {
+      if (!currentCustomerId) return;
+      const c = Data.getCustomer(currentCustomerId);
+      if (!c) return;
+
+      c.reportTitle = el('reportTitle').value || "ใบแสดงรายการปั้นพอร์ต";
+      c.bankName = el('bankName').value || c.name || "";
+      c.accountNo = el('accountNo').value || c.accountNo;
+
+      Data.setCustomer(currentCustomerId, c);
+
+      const index = Data.getIndex();
+      const meta = index.find(x => x.id === currentCustomerId);
+      if (meta) {
+        meta.updatedAt = Date.now();
+        meta.name = c.name || meta.name;
+        Data.setIndex(index);
+      }
+    }
+
+    function renderTransactionTable() {
+      if (!currentCustomerId) return;
+      const c = Data.getCustomer(currentCustomerId);
+      if (!c) return;
+
+      const txs = c.transactions || [];
+      const tbody = el('transactionTable');
+
+      const initial = Calc.sumInitial(txs);
+      const { balances, profitAmounts, finalBalance } = Calc.computeBalancesWithProfit(txs);
+
+      el('initialInvestment').textContent = Utils.fmt(initial);
+      el('finalBalance').textContent = Utils.fmt(finalBalance);
+      el('finalBalance').className = (finalBalance >= 0)
+        ? 'w-64 p-3 bg-green-50 border-2 border-green-300 rounded-lg text-center font-bold text-lg text-green-700'
+        : 'w-64 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-center font-bold text-lg text-red-700';
+
+      el('ap_total').value = finalBalance ? finalBalance.toFixed(2) : '';
+      el('ap_fund').value = initial ? initial.toFixed(2) : '';
+      updateAlphaProfit(finalBalance, initial);
+
+      tbody.innerHTML = txs.map((t, i) => {
+        const bal = balances[i] ?? 0;
+        const pAmt = profitAmounts[i] ?? 0;
+
+        return `
+          <tr class="hover:bg-gray-50">
+            <td class="px-3 py-4 whitespace-nowrap">
+              <input type="date" value="${t.date || ''}"
+                     data-i="${i}" data-f="date"
+                     class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
+            </td>
+
+            <td class="px-3 py-4 whitespace-nowrap text-right">
+              <input type="text" value="${t.deposit || ''}" placeholder="0.00"
+                     data-i="${i}" data-f="deposit"
+                     class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
+              <div class="text-xs text-blue-600 mt-1">${t.deposit ? Utils.fmt(Utils.toNum(t.deposit)) : ''}</div>
+            </td>
+
+            <td class="px-3 py-4 whitespace-nowrap text-right">
+              <input type="text" value="${t.withdraw || ''}" placeholder="0.00"
+                     data-i="${i}" data-f="withdraw"
+                     class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
+              <div class="text-xs text-red-600 mt-1">${t.withdraw ? Utils.fmt(Utils.toNum(t.withdraw)) : ''}</div>
+            </td>
+
+            <td class="px-3 py-4 whitespace-nowrap text-right">
+              <input type="text" value="${t.profitPercent || ''}" placeholder="0"
+                     data-i="${i}" data-f="profitPercent"
+                     class="w-full p-1 border border-gray-200 rounded text-right focus:ring-1 focus:ring-green-500 focus:border-transparent">
+              <div class="text-xs text-gray-600 mt-1">${t.profitPercent ? (t.profitPercent + ' %') : ''}</div>
+            </td>
+
+            <td class="px-3 py-4 whitespace-nowrap text-right">
+              <div class="w-full p-1 border border-gray-100 rounded bg-gray-50 text-right text-green-700">
+                ${pAmt ? Utils.fmt(pAmt) : ''}
+              </div>
+            </td>
+
+            <td class="px-3 py-4">
+              <input type="text" value="${t.channel || ''}" placeholder=""
+                     data-i="${i}" data-f="channel"
+                     class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
+            </td>
+
+            <td class="px-3 py-4 whitespace-nowrap text-right font-medium ${bal >= 0 ? 'text-green-600' : 'text-red-600'}">
+              ${Utils.fmt(bal)}
+            </td>
+
+            <td class="px-3 py-4">
+              <input type="text" value="${t.detail || ''}" placeholder=""
+                     data-i="${i}" data-f="detail"
+                     class="w-full p-1 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent">
+            </td>
+
+            <td class="px-3 py-4 whitespace-nowrap text-center no-print">
+              <button class="btnInsert text-blue-600 hover:text-blue-800 mr-2" data-insert="${i}" title="เพิ่มแถวใหม่">➕</button>
+              <button class="btnRemove text-red-600 hover:text-red-800" data-remove="${i}" title="ลบแถว">🗑️</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.querySelectorAll('input[data-i]').forEach(inp => {
+        inp.addEventListener('change', () => {
+          if (IS_MOBILE) return; // มือถืออ่านอย่างเดียว
+
+          const i = parseInt(inp.getAttribute('data-i'), 10);
+          const f = inp.getAttribute('data-f');
+          let v = inp.value;
+
+          if (['deposit','withdraw','profitPercent'].includes(f)) v = Utils.normalizeNumber(v);
+
+          const c2 = Data.getCustomer(currentCustomerId);
+          if (!c2) return;
+          c2.transactions[i][f] = v;
+          Data.setCustomer(currentCustomerId, c2);
+
+          renderTransactionTable();
+          renderCustomerGrid();
+        });
+      });
+
+      tbody.querySelectorAll('[data-insert]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+          insertRow(parseInt(btn.getAttribute('data-insert'), 10));
+        });
+      });
+      tbody.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+          removeRow(parseInt(btn.getAttribute('data-remove'), 10));
+        });
+      });
+
+      saveCurrentCustomerFromInputs();
+    }
+
+    function addRow() {
+      if (!currentCustomerId) return;
+      const c = Data.getCustomer(currentCustomerId);
+      if (!c) return;
+
+      c.transactions.push({ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" });
+      Data.setCustomer(currentCustomerId, c);
+      renderTransactionTable();
+      renderCustomerGrid();
+    }
+
+    function insertRow(i) {
+      if (!currentCustomerId) return;
+      const c = Data.getCustomer(currentCustomerId);
+      if (!c) return;
+
+      c.transactions.splice(i + 1, 0, { tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" });
+      Data.setCustomer(currentCustomerId, c);
+      renderTransactionTable();
+      renderCustomerGrid();
+    }
+
+    function removeRow(i) {
+      if (!currentCustomerId) return;
+      const c = Data.getCustomer(currentCustomerId);
+      if (!c) return;
+
+      if ((c.transactions || []).length <= 1) return alert('ต้องมีรายการอย่างน้อย 1 รายการ');
+      c.transactions.splice(i, 1);
+      Data.setCustomer(currentCustomerId, c);
+      renderTransactionTable();
+      renderCustomerGrid();
+    }
+
+    function updateAlphaProfit(total, fund) {
+      const resultDiv = el('ap_result');
+      if (!resultDiv) return;
+
+      if ((total === 0 && fund === 0) || (!Number.isFinite(total) && !Number.isFinite(fund))) {
+        resultDiv.classList.add('hidden');
+        return;
+      }
+
+      const profit = total - fund;
+      const half = profit / 2;
+      const clientNet = fund + half;
+      const managerNet = half;
+
+      resultDiv.innerHTML = `
+        <h4 class="text-base md:text-lg font-semibold text-gray-800 mb-3 text-center">📑 สรุปผลการแบ่งกำไร</h4>
+        <div class="space-y-2 text-sm md:text-base">
+          <div class="flex justify-between border-b border-gray-200 pb-1">
+            <span class="text-gray-600">ยอดรวมทั้งหมด</span>
+            <span class="font-semibold text-gray-800">${Utils.fmt(total)} บาท</span>
+          </div>
+          <div class="flex justify-between border-b border-gray-200 pb-1">
+            <span class="text-gray-600">เงินทุนลูกค้า</span>
+            <span class="font-semibold text-gray-800">${Utils.fmt(fund)} บาท</span>
+          </div>
+          <div class="flex justify-between border-b border-gray-200 pb-1">
+            <span class="text-gray-600">กำไรสุทธิ</span>
+            <span class="font-semibold ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}">${Utils.fmt(profit)} บาท</span>
+          </div>
+          <div class="flex justify-between border-b border-gray-200 pb-1">
+            <span class="text-gray-600">แบ่งกำไรคนละ (50/50)</span>
+            <span class="font-semibold text-indigo-600">${Utils.fmt(half)} บาท</span>
+          </div>
+        </div>
+
+        <div class="mt-3 bg-white rounded-lg shadow-sm px-3 py-2 space-y-1">
+          <div class="flex justify-between text-sm md:text-base">
+            <span class="font-medium text-gray-700">💎 ผู้ว่าจ้างได้รับสุทธิ</span>
+            <span class="font-semibold text-emerald-600">${Utils.fmt(clientNet)} บาท</span>
+          </div>
+          <div class="flex justify-between text-xs md:text-sm text-gray-600">
+            <span>ส่วนของผู้ว่าจ้าง</span><span>${Utils.fmt(half)} บาท</span>
+          </div>
+          <div class="flex justify-between text-xs md:text-sm text-gray-600">
+            <span>ส่วนของผู้ดูแลพอร์ต</span><span>${Utils.fmt(managerNet)} บาท</span>
+          </div>
+        </div>
+      `;
+      resultDiv.classList.remove('hidden');
+    }
+
+    // =======================
+    // Overview (Modal)
+    // =======================
+    function openOverview() {
+      renderOverview();
+      el('overviewModal').classList.remove('hidden');
+    }
+    function closeOverview() {
+      el('overviewModal').classList.add('hidden');
+    }
+
+    function renderOverview() {
+      const tbody = el('overviewTableBody');
+      const totalCustomersEl = el('overviewTotalCustomers');
+      const sumInitialEl = el('overviewSumInitial');
+      const sumFinalEl = el('overviewSumFinal');
+      const sumProfitEl = el('overviewSumProfit');
+
+      const index = Data.getIndex();
+      const labels = [];
+      const finalData = [];
+      const profitData = [];
+      const roiData = [];
+
+      let sumInitial = 0, sumFinal = 0, sumProfit = 0;
+
+      tbody.innerHTML = index.map((meta, idx) => {
+        const c = Data.getCustomer(meta.id);
+        const txs = (c?.transactions || []);
+        const initial = Calc.sumInitial(txs);
+        const final = Calc.computeFinalBalance(txs);
+        const profit = final - initial;
+        const roi = initial > 0 ? (profit / initial) * 100 : 0;
+
+        sumInitial += initial;
+        sumFinal += final;
+        sumProfit += profit;
+
+        labels.push(meta.name);
+        finalData.push(final);
+        profitData.push(profit);
+        roiData.push(Number.isFinite(roi) ? roi : 0);
+
+        return `
+          <tr class="border-b last:border-b-0">
+            <td class="px-2 py-1 text-xs text-gray-500">${idx + 1}</td>
+            <td class="px-2 py-1 text-xs text-gray-800 font-medium">${meta.name}</td>
+            <td class="px-2 py-1 text-xs text-right text-gray-600">${Utils.fmt(initial)}</td>
+            <td class="px-2 py-1 text-xs text-right text-gray-600">${Utils.fmt(final)}</td>
+            <td class="px-2 py-1 text-xs text-right ${profit >= 0 ? 'text-emerald-600' : 'text-red-600'}">${Utils.fmt(profit)}</td>
+            <td class="px-2 py-1 text-xs text-right ${roi >= 0 ? 'text-indigo-600' : 'text-red-600'}">${roi.toFixed(2)} %</td>
+          </tr>
+        `;
+      }).join('');
+
+      totalCustomersEl.textContent = index.length;
+      sumInitialEl.textContent = Utils.fmt(sumInitial);
+      sumFinalEl.textContent = Utils.fmt(sumFinal);
+      sumProfitEl.textContent = Utils.fmt(sumProfit);
+      sumProfitEl.className = 'text-lg font-semibold ' + (sumProfit >= 0 ? 'text-emerald-600' : 'text-red-600');
+
+      updateMonthlyProfit();
+
+      const canvas = el('overviewChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      if (overviewChart) overviewChart.destroy();
+
+      overviewChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'มูลค่าพอร์ตรวมล่าสุด', data: finalData, backgroundColor: 'rgba(16, 185, 129, 0.7)', borderRadius: 6, yAxisID: 'y' },
+            { label: 'กำไรสุทธิ', data: profitData, backgroundColor: 'rgba(79, 70, 229, 0.6)', borderRadius: 6, yAxisID: 'y' },
+            { type: 'line', label: 'ผลตอบแทน (%)', data: roiData, borderColor: 'rgb(249, 115, 22)', backgroundColor: 'rgba(249, 115, 22, 0.2)', tension: 0.3, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const dsLabel = context.dataset.label || '';
+                  const value = context.raw;
+                  if (String(dsLabel).includes('%')) return `${dsLabel}: ${Number(value).toFixed(2)} %`;
+                  return `${dsLabel}: ${Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: { position: 'left', title: { display: true, text: 'มูลค่า (บาท)' }, ticks: { callback: (v) => Number(v).toLocaleString('th-TH') } },
+            y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'ผลตอบแทน (%)' }, ticks: { callback: (v) => v + '%' } }
+          }
+        }
+      });
+    }
+
+    function updateMonthlyProfit() {
+      const monthSelect = el('monthlyMonth');
+      const yearSelect  = el('monthlyYear');
+      const monthProfitEl = el('overviewMonthlyProfit');
+      const monthLabelEl  = el('overviewMonthlyLabel');
+
+      const now = new Date();
+      if (!monthSelect.value) monthSelect.value = String(now.getMonth() + 1);
+      if (!yearSelect.value) yearSelect.value = String(now.getFullYear() + 543);
+
+      const month = parseInt(monthSelect.value, 10);
+      const yearTh = parseInt(yearSelect.value, 10);
+      if (!month || !yearTh) return;
+
+      const yearAD = yearTh - 543;
+      const profit = Calc.monthlyProfitAll(yearAD, month);
+
+      monthProfitEl.textContent = Utils.fmt(profit);
+      monthProfitEl.className = 'text-lg font-semibold ' + (profit >= 0 ? 'text-rose-700' : 'text-red-600');
+
+      const names = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      monthLabelEl.textContent = `${names[month - 1]} ${yearTh}`;
+    }
+
+    // =======================
+    // CSV Export/Import
+    // =======================
+    function exportCSVCustomer() {
+      if (!currentCustomerId) return;
+      saveCurrentCustomerFromInputs();
+
+      const c = Data.getCustomer(currentCustomerId);
+      if (!c) return;
+
+      const header = ['customer_id','customer_name','date','deposit','withdraw','profit_percent','channel','detail'];
+      const lines = [header.join(',')];
 
       for (const t of (c.transactions || [])) {
         lines.push([
@@ -1131,266 +1140,428 @@ const UI = (() => {
           Utils.safeCSV(t.detail || '')
         ].join(','));
       }
+
+      downloadBlob(lines.join('\n'), `alphapatra-customer-${c.id}-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
     }
 
-    downloadBlob(lines.join('\n'), `alphapatra-all-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
-  }
+    function exportCSVAll() {
+      const header = ['customer_id','customer_name','date','deposit','withdraw','profit_percent','channel','detail'];
+      const lines = [header.join(',')];
 
-  function importCSVCustomer(file) {
-    if (!currentCustomerId) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = String(reader.result || '');
-        const lines = text.split('\n').map(x => x.trim()).filter(Boolean);
-        if (lines.length < 2) return alert('ไฟล์ CSV ว่าง หรือรูปแบบไม่ถูกต้อง');
+      const index = Data.getIndex();
+      for (const meta of index) {
+        const c = Data.getCustomer(meta.id);
+        if (!c) continue;
 
-        const header = lines[0].toLowerCase();
-        // รองรับทั้งไฟล์แบบใหม่และแบบเก่าเล็กน้อย
-        // แบบใหม่: customer_id,customer_name,date,deposit,withdraw,profit_percent,channel,detail
-        // ถ้าเป็นแบบเก่า ให้พ่อ Export จากระบบนี้ก่อนจะชัวร์ที่สุด
-
-        const txs = [];
-        for (let i = 1; i < lines.length; i++) {
-          const vals = Utils.parseCSVLine(lines[i]);
-          if (vals.length < 8) continue;
-
-          txs.push({
-            tid: Utils.id(),
-            date: vals[2] || '',
-            deposit: (vals[3] && vals[3] !== '0.00') ? vals[3] : '',
-            withdraw: (vals[4] && vals[4] !== '0.00') ? vals[4] : '',
-            profitPercent: (vals[5] && vals[5] !== '0.00') ? vals[5] : '',
-            channel: vals[6] || '',
-            detail: vals[7] || ''
-          });
+        for (const t of (c.transactions || [])) {
+          lines.push([
+            c.id,
+            Utils.safeCSV(c.name),
+            t.date || '',
+            Utils.toNum(t.deposit).toFixed(2),
+            Utils.toNum(t.withdraw).toFixed(2),
+            Utils.toNum(t.profitPercent).toFixed(2),
+            Utils.safeCSV(t.channel || ''),
+            Utils.safeCSV(t.detail || '')
+          ].join(','));
         }
-
-        if (!txs.length) return alert('ไม่พบรายการที่นำเข้าได้');
-
-        const c = Data.getCustomer(currentCustomerId);
-        if (!c) return;
-        c.transactions = txs;
-        Data.setCustomer(currentCustomerId, c);
-
-        renderTransactionTable();
-        renderCustomerGrid();
-        alert(`นำเข้าข้อมูลสำเร็จ ${txs.length} รายการ`);
-      } catch (e) {
-        alert('เกิดข้อผิดพลาดในการนำเข้าไฟล์ CSV');
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function downloadBlob(content, filename, mime) {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  // =======================
-  // Export Image
-  // =======================
-  function loadHtml2Canvas() {
-    return new Promise((resolve) => {
-      if (window.html2canvas) return resolve();
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      s.onload = resolve;
-      document.head.appendChild(s);
-    });
-  }
-
-  async function exportAsImage(format) {
-    try {
-      toggleExportMenu(false);
-
-      const overlay = document.createElement('div');
-      overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-      overlay.innerHTML = `
-        <div class="bg-white rounded-lg p-6 text-center">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p class="text-gray-700">กำลังสร้างไฟล์ภาพความละเอียดสูง...</p>
-        </div>`;
-      document.body.appendChild(overlay);
-
-      await loadHtml2Canvas();
-
-      const noPrint = document.querySelectorAll('.no-print');
-      noPrint.forEach(x => x.style.display = 'none');
-
-      const section = document.getElementById('statementSection');
-
-      const temp = document.createElement('div');
-      temp.className = 'bg-gray-50 p-4';
-
-      // clone: header + table + alpha + footer (ตามโครงหน้า statement)
-      // (ไม่ clone nav bar)
-      for (let i = 1; i < section.children.length; i++) {
-        temp.appendChild(section.children[i].cloneNode(true));
       }
 
-      document.body.appendChild(temp);
-
-      const rect = temp.getBoundingClientRect();
-      const canvas = await html2canvas(temp, {
-        backgroundColor: '#ffffff',
-        scale: 3,
-        useCORS: true,
-        allowTaint: true,
-        scrollX: 0,
-        scrollY: 0,
-        width: rect.width,
-        height: rect.height,
-        windowWidth: rect.width,
-        windowHeight: rect.height
-      });
-
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `alphapatra-${currentCustomerId}-${new Date().toISOString().slice(0,10)}.${format}`;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        noPrint.forEach(x => x.style.display = '');
-        document.body.removeChild(temp);
-        document.body.removeChild(overlay);
-      }, `image/${format}`, format === 'jpeg' ? 0.95 : 1.0);
-
-    } catch (e) {
-      alert('เกิดข้อผิดพลาดในการส่งออกไฟล์ภาพ');
+      downloadBlob(lines.join('\n'), `alphapatra-all-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
     }
-  }
 
-  function toggleExportMenu(force) {
-    const menu = el('exportMenu');
-    if (typeof force === 'boolean') {
-      menu.classList.toggle('hidden', !force);
-      return;
-    }
-    menu.classList.toggle('hidden');
-  }
-
-  // =======================
-  // Logo per customer
-  // =======================
-  function loadLogoForCustomer(id) {
-    const saved = localStorage.getItem(STORAGE.logoKey(id));
-    const img = el('logoImage');
-    const txt = el('logoText');
-
-    if (saved) {
-      img.src = saved;
-      img.classList.remove('hidden');
-      txt.classList.add('hidden');
-    } else {
-      img.classList.add('hidden');
-      txt.classList.remove('hidden');
-    }
-  }
-
-  function bindLogoUpload() {
-    const container = el('logoContainer');
-    const input = el('logoInput');
-
-    container.addEventListener('click', () => input.click());
-
-    input.addEventListener('change', () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith('image/')) return alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
-      if (file.size > 5 * 1024 * 1024) return alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
+    function importCSVCustomer(file) {
+      if (!currentCustomerId) return;
+      if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว\n(ใช้ Import CSV ทั้งระบบบนหน้าแรกเพื่อ “ดูข้อมูล” แทน)');
 
       const reader = new FileReader();
       reader.onload = () => {
-        if (!currentCustomerId) return;
-        localStorage.setItem(STORAGE.logoKey(currentCustomerId), reader.result);
-        loadLogoForCustomer(currentCustomerId);
+        try {
+          const text = String(reader.result || '');
+          const lines = text.split('\n').map(x => x.trim()).filter(Boolean);
+          if (lines.length < 2) return alert('ไฟล์ CSV ว่าง หรือรูปแบบไม่ถูกต้อง');
+
+          const txs = [];
+          for (let i = 1; i < lines.length; i++) {
+            const vals = Utils.parseCSVLine(lines[i]);
+            if (vals.length < 8) continue;
+
+            txs.push({
+              tid: Utils.id(),
+              date: vals[2] || '',
+              deposit: (vals[3] && vals[3] !== '0.00') ? vals[3] : '',
+              withdraw: (vals[4] && vals[4] !== '0.00') ? vals[4] : '',
+              profitPercent: (vals[5] && vals[5] !== '0.00') ? vals[5] : '',
+              channel: vals[6] || '',
+              detail: vals[7] || ''
+            });
+          }
+
+          if (!txs.length) return alert('ไม่พบรายการที่นำเข้าได้');
+
+          const c = Data.getCustomer(currentCustomerId);
+          if (!c) return;
+          c.transactions = txs;
+          Data.setCustomer(currentCustomerId, c);
+
+          renderTransactionTable();
+          renderCustomerGrid();
+          alert(`นำเข้าข้อมูลสำเร็จ ${txs.length} รายการ`);
+        } catch (e) {
+          alert('เกิดข้อผิดพลาดในการนำเข้าไฟล์ CSV');
+        }
       };
-      reader.readAsDataURL(file);
-    });
-  }
+      reader.readAsText(file);
+    }
 
-  // =======================
-  // Bind Global Events
-  // =======================
-  function bind() {
-    // home
-    el('btnAddCustomer').addEventListener('click', addCustomer);
-    el('btnOpenOverview').addEventListener('click', openOverview);
+    // Import ALL (mobile view): สร้าง index + ลูกค้าตาม customer_id/customer_name ในไฟล์
+    function importCSVAllToThisDevice(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || '');
+          const lines = text.split('\n').map(x => x.trim()).filter(Boolean);
+          if (lines.length < 2) return alert('ไฟล์ CSV ว่าง หรือรูปแบบไม่ถูกต้อง');
 
-    // statement
-    el('btnBackHome').addEventListener('click', showHome);
-    el('btnRenameCustomer').addEventListener('click', () => currentCustomerId && renameCustomer(currentCustomerId));
-    el('btnDeleteCustomer').addEventListener('click', () => currentCustomerId && deleteCustomer(currentCustomerId));
-    el('btnAddRow').addEventListener('click', addRow);
+          const byCustomer = new Map(); // id -> { meta, txs }
+          for (let i = 1; i < lines.length; i++) {
+            const vals = Utils.parseCSVLine(lines[i]);
+            if (vals.length < 8) continue;
 
-    // header inputs save
-    el('reportTitle').addEventListener('change', () => { saveCurrentCustomerFromInputs(); renderCustomerGrid(); });
-    el('bankName').addEventListener('change', () => { saveCurrentCustomerFromInputs(); });
+            const cid = parseInt(vals[0], 10);
+            const cname = (vals[1] || '').replace(/^"|"$/g, '').trim() || `ลูกค้า ${cid}`;
+            if (!Number.isFinite(cid) || cid <= 0) continue;
 
-    // export menu
-    el('btnExportMenu').addEventListener('click', () => toggleExportMenu());
+            if (!byCustomer.has(cid)) {
+              byCustomer.set(cid, {
+                meta: { id: cid, name: cname, createdAt: Date.now(), updatedAt: Date.now() },
+                txs: []
+              });
+            }
 
-    document.addEventListener('click', (e) => {
-      const menu = el('exportMenu');
-      const btn = el('btnExportMenu');
-      if (!menu.classList.contains('hidden')) {
-        const inside = menu.contains(e.target) || btn.contains(e.target);
-        if (!inside) toggleExportMenu(false);
+            byCustomer.get(cid).txs.push({
+              tid: Utils.id(),
+              date: vals[2] || '',
+              deposit: (vals[3] && vals[3] !== '0.00') ? vals[3] : '',
+              withdraw: (vals[4] && vals[4] !== '0.00') ? vals[4] : '',
+              profitPercent: (vals[5] && vals[5] !== '0.00') ? vals[5] : '',
+              channel: vals[6] || '',
+              detail: vals[7] || ''
+            });
+          }
+
+          if (!byCustomer.size) return alert('ไม่พบข้อมูลลูกค้าในไฟล์');
+
+          const newIndex = Array.from(byCustomer.values())
+            .map(x => x.meta)
+            .sort((a,b) => a.id - b.id);
+
+          Data.setIndex(newIndex);
+
+          for (const [cid, pack] of byCustomer.entries()) {
+            const data = {
+              id: cid,
+              name: pack.meta.name,
+              reportTitle: "ใบแสดงรายการปั้นพอร์ต",
+              bankName: pack.meta.name,
+              accountNo: "นายธนภัทร ศาลางาม (อัลฟ่าภัทร AlphaPatra)",
+              transactions: pack.txs.length ? pack.txs : [{ tid: Utils.id(), date: "", deposit: "", withdraw: "", profitPercent: "", channel: "", detail: "" }],
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            };
+            Data.setCustomer(cid, data);
+          }
+
+          UI.renderCustomerGrid();
+          UI.showHome();
+          alert(`นำเข้าข้อมูลสำเร็จ ${newIndex.length} ลูกค้า\n(ข้อมูลถูกเก็บไว้ในมือถือเครื่องนี้)`);
+        } catch (e) {
+          alert('นำเข้า CSV ทั้งระบบไม่สำเร็จ\nตรวจสอบว่าไฟล์มาจากปุ่ม Export CSV (ทั้งระบบ) ของ AlphaPatra');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function downloadBlob(content, filename, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // =======================
+    // Export Image
+    // =======================
+    function loadHtml2Canvas() {
+      return new Promise((resolve) => {
+        if (window.html2canvas) return resolve();
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload = resolve;
+        document.head.appendChild(s);
+      });
+    }
+
+    async function exportAsImage(format) {
+      try {
+        toggleExportMenu(false);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        overlay.innerHTML = `
+          <div class="bg-white rounded-lg p-6 text-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p class="text-gray-700">กำลังสร้างไฟล์ภาพความละเอียดสูง...</p>
+          </div>`;
+        document.body.appendChild(overlay);
+
+        await loadHtml2Canvas();
+
+        const noPrint = document.querySelectorAll('.no-print');
+        noPrint.forEach(x => x.style.display = 'none');
+
+        const section = document.getElementById('statementSection');
+        const temp = document.createElement('div');
+        temp.className = 'bg-gray-50 p-4';
+
+        for (let i = 1; i < section.children.length; i++) {
+          temp.appendChild(section.children[i].cloneNode(true));
+        }
+
+        document.body.appendChild(temp);
+
+        const rect = temp.getBoundingClientRect();
+        const canvas = await html2canvas(temp, {
+          backgroundColor: '#ffffff',
+          scale: 3,
+          useCORS: true,
+          allowTaint: true,
+          scrollX: 0,
+          scrollY: 0,
+          width: rect.width,
+          height: rect.height,
+          windowWidth: rect.width,
+          windowHeight: rect.height
+        });
+
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `alphapatra-${currentCustomerId}-${new Date().toISOString().slice(0,10)}.${format}`;
+          a.click();
+          URL.revokeObjectURL(url);
+
+          noPrint.forEach(x => x.style.display = '');
+          document.body.removeChild(temp);
+          document.body.removeChild(overlay);
+        }, `image/${format}`, format === 'jpeg' ? 0.95 : 1.0);
+
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการส่งออกไฟล์ภาพ');
       }
-    });
+    }
 
-    el('btnExportPNG').addEventListener('click', () => exportAsImage('png'));
-    el('btnExportJPG').addEventListener('click', () => exportAsImage('jpeg'));
-    el('btnExportCSVCustomer').addEventListener('click', exportCSVCustomer);
-    el('btnExportCSVAll').addEventListener('click', exportCSVAll);
-    el('btnPrint').addEventListener('click', () => { toggleExportMenu(false); window.print(); });
+    function toggleExportMenu(force) {
+      const menu = el('exportMenu');
+      if (typeof force === 'boolean') {
+        menu.classList.toggle('hidden', !force);
+        return;
+      }
+      menu.classList.toggle('hidden');
+    }
 
-    // import
-    el('btnImportCSVCustomer').addEventListener('click', () => el('csvInputCustomer').click());
-    el('csvInputCustomer').addEventListener('change', (e) => {
-      const f = e.target.files?.[0];
-      if (f) importCSVCustomer(f);
-      e.target.value = '';
-    });
+    // =======================
+    // Logo per customer
+    // =======================
+    function loadLogoForCustomer(id) {
+      const saved = localStorage.getItem(STORAGE.logoKey(id));
+      const img = el('logoImage');
+      const txt = el('logoText');
 
-    // monthly selectors
-    el('monthlyMonth').addEventListener('change', () => renderOverview());
-    el('monthlyYear').addEventListener('change', () => renderOverview());
+      if (saved) {
+        img.src = saved;
+        img.classList.remove('hidden');
+        txt.classList.add('hidden');
+      } else {
+        img.classList.add('hidden');
+        txt.classList.remove('hidden');
+      }
+    }
 
-    bindLogoUpload();
+    function bindLogoUpload() {
+      const container = el('logoContainer');
+      const input = el('logoInput');
 
-    // auto-save (กันพ่อเผลอปิดแท็บ)
-    setInterval(() => {
-      if (currentCustomerId) saveCurrentCustomerFromInputs();
-    }, 15000);
-  }
+      container.addEventListener('click', () => {
+        if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+        input.click();
+      });
 
-  return {
-    bind,
-    showHome,
-    showStatement,
-    renderCustomerGrid,
-    openOverview,
-    closeOverview
-  };
-})();
+      input.addEventListener('change', () => {
+        if (IS_MOBILE) return;
+        const file = input.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) return alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+        if (file.size > 5 * 1024 * 1024) return alert('ขนาดไฟล์ต้องไม่เกิน 5MB');
 
-/** ==========================
- *  INIT
- *  ========================== */
-(function init() {
-  Data.ensureSeed();
-  UI.bind();
-  UI.renderCustomerGrid();
-  UI.showHome();
-})();
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (!currentCustomerId) return;
+          localStorage.setItem(STORAGE.logoKey(currentCustomerId), reader.result);
+          loadLogoForCustomer(currentCustomerId);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /** ==========================
+     *  Mobile Read-only Apply
+     *  ========================== */
+    function applyMobileReadOnly() {
+      if (!IS_MOBILE) return;
+
+      // แสดง notice
+      const notice = el('mobileNotice');
+      if (notice) notice.style.display = 'block';
+
+      // ซ่อนปุ่มแก้ไข/เพิ่ม/ลบหลัก ๆ
+      const hideIds = [
+        'btnAddCustomer',
+        'btnAddRow',
+        'btnRenameCustomer',
+        'btnDeleteCustomer',
+        'btnImportCSVCustomer'
+      ];
+      hideIds.forEach(id => {
+        const node = el(id);
+        if (node) node.style.display = 'none';
+      });
+
+      // ซ่อนปุ่มใน card และตาราง
+      document.querySelectorAll('.btnRename, .btnDelete, .btnInsert, .btnRemove').forEach(x => x.style.display = 'none');
+
+      // ทำ input ทั้งหมด readOnly/disabled ในหน้า statement
+      if (!el('statementSection').classList.contains('hidden')) {
+        document.querySelectorAll('#statementSection input, #statementSection textarea, #statementSection select').forEach(inp => {
+          if (inp.id === 'btnExportMenu') return;
+          if (inp.type === 'file') return;
+          inp.setAttribute('disabled', 'disabled');
+          inp.classList.add('bg-gray-100');
+        });
+      }
+
+      // เปิดปุ่มนำเข้า CSV ทั้งระบบ สำหรับมือถือ
+      const btnImportAll = el('btnImportCSVAllMobile');
+      if (btnImportAll) btnImportAll.classList.remove('hidden');
+    }
+
+    // =======================
+    // Bind Global Events
+    // =======================
+    function bind() {
+      el('btnAddCustomer').addEventListener('click', addCustomer);
+      el('btnOpenOverview').addEventListener('click', openOverview);
+
+      el('btnBackHome').addEventListener('click', showHome);
+      el('btnRenameCustomer').addEventListener('click', () => {
+        if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+        currentCustomerId && renameCustomer(currentCustomerId);
+      });
+      el('btnDeleteCustomer').addEventListener('click', () => {
+        if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+        currentCustomerId && deleteCustomer(currentCustomerId);
+      });
+      el('btnAddRow').addEventListener('click', () => {
+        if (IS_MOBILE) return alert('มือถือเป็นโหมดอ่านอย่างเดียว');
+        addRow();
+      });
+
+      el('reportTitle').addEventListener('change', () => {
+        if (IS_MOBILE) return;
+        saveCurrentCustomerFromInputs(); renderCustomerGrid();
+      });
+      el('bankName').addEventListener('change', () => {
+        if (IS_MOBILE) return;
+        saveCurrentCustomerFromInputs();
+      });
+
+      el('btnExportMenu').addEventListener('click', () => toggleExportMenu());
+      document.addEventListener('click', (e) => {
+        const menu = el('exportMenu');
+        const btn = el('btnExportMenu');
+        if (!menu.classList.contains('hidden')) {
+          const inside = menu.contains(e.target) || btn.contains(e.target);
+          if (!inside) toggleExportMenu(false);
+        }
+      });
+
+      el('btnExportPNG').addEventListener('click', () => exportAsImage('png'));
+      el('btnExportJPG').addEventListener('click', () => exportAsImage('jpeg'));
+      el('btnExportCSVCustomer').addEventListener('click', exportCSVCustomer);
+      el('btnExportCSVAll').addEventListener('click', exportCSVAll);
+      el('btnPrint').addEventListener('click', () => { toggleExportMenu(false); window.print(); });
+
+      el('btnImportCSVCustomer').addEventListener('click', () => el('csvInputCustomer').click());
+      el('csvInputCustomer').addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (f) importCSVCustomer(f);
+        e.target.value = '';
+      });
+
+      el('monthlyMonth').addEventListener('change', () => renderOverview());
+      el('monthlyYear').addEventListener('change', () => renderOverview());
+
+      // Mobile Import All
+      el('btnImportCSVAllMobile').addEventListener('click', () => el('csvInputAllMobile').click());
+      el('csvInputAllMobile').addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (f) importCSVAllToThisDevice(f);
+        e.target.value = '';
+      });
+
+      bindLogoUpload();
+
+      // auto-save เฉพาะคอม
+      if (!IS_MOBILE) {
+        setInterval(() => {
+          if (currentCustomerId) saveCurrentCustomerFromInputs();
+        }, 15000);
+      }
+    }
+
+    return {
+      bind,
+      showHome,
+      showStatement,
+      renderCustomerGrid,
+      openOverview,
+      closeOverview
+    };
+  })();
+
+  /** ==========================
+   *  INIT
+   *  ========================== */
+  (function init() {
+    Data.ensureSeed();
+    UI.bind();
+    UI.renderCustomerGrid();
+    UI.showHome();
+
+    // สรุปโหมดมือถือทันที
+    if (IS_MOBILE) {
+      const notice = document.getElementById("mobileNotice");
+      if (notice) notice.style.display = "block";
+      // ซ่อนปุ่มเพิ่มลูกค้าบนมือถือ
+      const btnAdd = document.getElementById("btnAddCustomer");
+      if (btnAdd) btnAdd.style.display = "none";
+      // เปิดปุ่ม import all
+      const btnImportAll = document.getElementById("btnImportCSVAllMobile");
+      if (btnImportAll) btnImportAll.classList.remove("hidden");
+    }
+  })();
 </script>
 
 </body>
